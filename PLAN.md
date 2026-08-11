@@ -223,10 +223,15 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
 
 Sorgenti importati (era .NET Framework 4.0, csproj vecchio stile, test SharpTestsEx):
 
-1. **Collisione con la BCL**: `EnumerableExtensions.Chunk<T>(IEnumerable<T>, int)` ha la stessa
-   firma di `Enumerable.Chunk` introdotto in .NET 6 → per i consumatori sarebbe una chiamata
-   ambigua. Gli helper (`Chunk`, `LeftFill`, `RightFill`) servono solo all'implementazione:
-   renderli `internal` e lasciare pubblica solo l'API su `decimal`.
+1. **`Chunk` custom → `Enumerable.Chunk` di LINQ** ✅ deciso (2026-08-11): verificato con test di
+   equivalenza (stessi gruppi su lunghezze 0–100, inclusi resti parziali) e micro-benchmark —
+   il Chunk LINQ è ~4× più veloce nello scenario reale della libreria (12 byte in chunk da 4:
+   77 ms vs 307 ms per 1M chiamate) e ~25× su sequenze grandi (1M elementi: 58 ms vs 1440 ms),
+   oltre a essere lazy (la versione GroupBy bufferizza l'intera sequenza). Quindi: eliminare il
+   `Chunk` custom (che peraltro colliderebbe con la BCL creando chiamate ambigue nei consumatori)
+   e usare quello di LINQ; su TFM senza `Enumerable.Chunk` (netstandard2.0, pre-.NET 6) tenerne
+   una copia **`internal`** dietro `#if !NET6_0_OR_GREATER`. `LeftFill`/`RightFill` restano ma
+   diventano `internal`: pubblica resta solo l'API su `decimal`.
 2. **API moderne**: `decimal.Scale` (dove disponibile) può sostituire l'estrazione manuale del
    byte di scala in `GetPrecision`; `Decimal.GetBits(value, Span<int>)` evita allocazioni;
    `PowerOfTen` via `Math.Pow` su `int` è fragile (limiti e conversioni float) → tabella di
