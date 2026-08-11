@@ -28,7 +28,8 @@ Stato dei repo sorgente al momento della copia (2026-08-11):
 | `tests/PhotoAtomic.Internationalization.Tool.Tests/` | `D:\PartyOf2\tests\PhotoAtomic.Internationalization.Tool.Tests\` | |
 | `samples/PhotoAtomic.Internationalization.Demo/` | `D:\PartyOf2\samples\PhotoAtomic.Internationalization.Demo\` | |
 | `eng/pack-local.ps1`, `eng/push-nuget.ps1` | `D:\PhotoAtomic.Darc\` | Path di progetto Darc hardcoded: da parametrizzare. |
-| `staging/candidates/EquatableArray.cs` | `D:\Nyota\src\Nyota\Models\EquatableArray.cs` | Candidato futuro (Fase 5). |
-| `staging/candidates/TUnitAssertionsExtensions.cs` | `D:\Nyota\src\Nyota.TestExtensions\TUnitAssertionsExtensions.cs` | Candidato futuro (Fase 5). |
+| `staging/candidates/EquatableArray.cs` | `D:\Nyota\src\Nyota\Models\EquatableArray.cs` | Candidato futuro (Fase 4). |
+| `staging/candidates/TUnitAssertionsExtensions.cs` | `D:\Nyota\src\Nyota.TestExtensions\TUnitAssertionsExtensions.cs` | Candidato futuro (Fase 4). |
+| `staging/import/DecimalPrecisionExtensions/` | github.com/PhotoAtomic/DecimalPrecisionExtensions (`master` @ `e3b9f84`) | Importato **con storia completa** via `git subtree add` (2026-08-11). Repo GitHub da archiviare dopo la pubblicazione del pacchetto (PLAN.md §6). |
 
 Esclusi ovunque: `bin/`, `obj/`, `.vs/`, `*.user`.
