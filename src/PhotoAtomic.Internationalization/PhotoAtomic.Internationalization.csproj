@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Class Internationalization lives in namespace PhotoAtomic so that
+         `using static PhotoAtomic.Internationalization;` exposes bare I(...) -->
+    <RootNamespace>PhotoAtomic</RootNamespace>
+  </PropertyGroup>
+
+</Project>

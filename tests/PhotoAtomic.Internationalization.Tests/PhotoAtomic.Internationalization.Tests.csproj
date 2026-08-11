@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Must NOT be PhotoAtomic.Internationalization.*: that would create a
+         namespace shadowing the Internationalization class and break
+         `using static PhotoAtomic.Internationalization;` at call sites. -->
+    <RootNamespace>PhotoAtomic.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhotoAtomic.Internationalization\PhotoAtomic.Internationalization.csproj" />
+    <ProjectReference Include="..\..\src\PhotoAtomic.Internationalization.AI\PhotoAtomic.Internationalization.AI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The engine is process-global by design; serializing the (fast) test
+         collections eliminates the residual cross-class interleavings. -->
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
