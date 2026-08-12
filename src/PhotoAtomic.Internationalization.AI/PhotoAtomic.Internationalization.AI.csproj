@@ -9,7 +9,12 @@
     <IsPackable>true</IsPackable>
     <Description>AI-powered translation filler for PhotoAtomic.Internationalization: completes missing catalog entries in the background via Microsoft.Extensions.AI (OpenAI-compatible providers). Kept separate so the core stays dependency-free.</Description>
     <PackageTags>i18n;internationalization;translation;ai;openai</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.AI" />

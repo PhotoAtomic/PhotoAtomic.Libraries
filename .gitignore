@@ -8,3 +8,7 @@ artifacts/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# Documenti di lavoro privati (restano solo in locale)
+PLAN.md
+IMPORT.md

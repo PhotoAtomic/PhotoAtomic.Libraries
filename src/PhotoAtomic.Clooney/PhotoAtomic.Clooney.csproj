@@ -8,6 +8,7 @@
 		<IsPackable>true</IsPackable>
 		<Description>Roslyn source generators for deep clone ([Clonable]), structural diff ([Diffable]) and structural hash ([Hashable]) with cycle handling. The runtime types come from the PhotoAtomic.Clooney.Abstractions dependency.</Description>
 		<PackageTags>source-generator;roslyn;clone;deep-clone;diff;hash</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<!-- Pacchetto analyzer: niente lib/, le dll viaggiano in analyzers/dotnet/cs;
 		     nessun symbol package (non ci sono pdb nel build output impacchettato). -->
 		<IncludeBuildOutput>false</IncludeBuildOutput>
@@ -20,6 +21,7 @@
 		     dei consumatori (equivalente NuGet del target _IncludeIndentedStringsInAnalyzerOutput). -->
 		<None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
 		<None Include="$(OutputPath)PhotoAtomic.IndentedStrings.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
 	<ItemGroup>

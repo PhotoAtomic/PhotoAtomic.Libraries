@@ -14,6 +14,7 @@
     <IsPackable>true</IsPackable>
     <Description>Opt-in compile-time companion for PhotoAtomic.Internationalization: generates the translation catalog from your T($"...") call sites and ships the PAI18N001 analyzer that flags unresolvable contexts. Install next to the core package.</Description>
     <PackageTags>i18n;internationalization;source-generator;roslyn;analyzer</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- Pacchetto analyzer: niente lib/, le dll viaggiano in analyzers/dotnet/cs;
          nessun symbol package (non ci sono pdb nel build output impacchettato). -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
@@ -26,6 +27,7 @@
          dei consumatori (equivalente NuGet del target _IncludeIndentedStringsInAnalyzerOutput). -->
     <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="$(OutputPath)PhotoAtomic.IndentedStrings.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

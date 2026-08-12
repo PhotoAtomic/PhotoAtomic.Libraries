@@ -16,8 +16,8 @@ packages with lockstep versioning (one git tag `v*` → one version for every pa
 | `PhotoAtomic.Internationalization.Tool` | dotnet tool (`pai18n`) | Extracts, pre-translates and verifies translation catalogs from a csproj. |
 | `PhotoAtomic.DecimalPrecisionExtensions` | library (netstandard2.0/net8.0) | `decimal` extensions for significant zeros: `SetPrecision`, `RoundWithPrecision`, `GetPrecision` on the binary representation. |
 
-More libraries are being folded in over time (see `PLAN.md` for the roadmap; the sources under
-`staging/` are imported repositories awaiting modernization, e.g. DecimalPrecisionExtensions).
+More libraries are being folded in over time; the sources under `staging/` are imported
+repositories awaiting modernization, kept with their full git history.
 
 ## Build
 
