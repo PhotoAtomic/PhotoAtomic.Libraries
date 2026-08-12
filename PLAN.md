@@ -225,9 +225,18 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
     storico), significando costruito senza il bug del segno sul bit 95, `decimal.Scale` e
     `GetBits(Span)` su net8. Test portati a xUnit + regressioni (14 verdi). Resta solo
     l'archiviazione del vecchio repo GitHub dopo la pubblicazione.
-  - **Libreria datafile** (lettura/scrittura file excel-like) — da mostrare e valutare assieme.
-  - **Libreria MVVM** — da rimodernare prima dell'inclusione (property `field` di C#, feature
-    .NET 10, ecc.): entra quando è pronta, senza fretta.
+  - **Criterio deciso (2026-08-12): Libraries = mattoni di base generali; i *prodotti* stanno
+    in repo propri e consumano i mattoni via NuGet.** In base a questo:
+    - **Libreria MVVM** — FUORI da Libraries (decisione utente): è un framework opinionato con
+      roadmap propria; la rimodernata (`field` keyword, .NET 10) si farà nel suo repo.
+    - **BlazorTemplater** — FUORI: è un fork Apache-2.0 (upstream conficient, fermo al 2022)
+      e comunque un prodotto. Prima di rimodernarlo valutare l'`HtmlRenderer` ufficiale di
+      .NET 8+ (Microsoft.AspNetCore.Components.Web), che copre il caso d'uso centrale.
+  - **Libreria datafile** (repo `PhotoAtomic.DataFile`, migrato da VSTS) — profilo giusto da
+    mattone: da mostrare e valutare assieme.
+  - Da vagliare poi tra i repo migrati da VSTS: `PhotoAtomic.Extensions`, `.Reflection`,
+    `.StructuralComparison`, ecc.; e decidere se archiviare `PhotoAtomic.Numerics` (probabile
+    copia VSTS dello stesso codice DecimalPrecision) con puntatore al monorepo.
   - **`PhotoAtomic.Generators.Toolkit`** (nome da confermare): pacchetto **source-only**
     (consegna `.cs` come compile items, niente dll da trasportare nel load context analyzer)
     per chi scrive generatori. Inquilini decisi: `EquatableArray<T>` (Nyota — serve a ogni
