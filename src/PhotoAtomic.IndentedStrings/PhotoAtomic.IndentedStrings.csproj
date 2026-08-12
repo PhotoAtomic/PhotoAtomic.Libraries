@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- netstandard2.0: deve poter girare dentro il load context degli analyzer Roslyn. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Porta ReadOnlySpan<T> su netstandard2.0; l'host del compilatore la fornisce a runtime. -->
+    <PackageReference Include="System.Memory" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- I test esercitano anche i polyfill internal (SplitAfter). -->
+    <InternalsVisibleTo Include="PhotoAtomic.IndentedStrings.Tests" />
+  </ItemGroup>
+
+</Project>

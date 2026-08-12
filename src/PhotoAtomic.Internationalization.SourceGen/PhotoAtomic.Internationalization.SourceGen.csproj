@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,9 +24,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- PhotoAtomic.IndentedStrings vendored as linked sources: analyzer
-         assemblies must be self-contained, binary deps are a minefield. -->
-    <Compile Include="..\PhotoAtomic.IndentedStrings\**\*.cs" LinkBase="IndentedStrings" />
+    <!-- IndentedStrings vive in un posto solo anche a livello di build: ProjectReference con
+         PrivateAssets="all" (fuori dal grafo di dipendenze NuGet) + il target sotto, che fa
+         viaggiare la dll nel load context degli analyzer dei consumatori — stessa tecnica di
+         PhotoAtomic.Clooney. -->
+    <ProjectReference Include="..\PhotoAtomic.IndentedStrings\PhotoAtomic.IndentedStrings.csproj" PrivateAssets="all" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <GetTargetPathDependsOn>$(GetTargetPathDependsOn);_IncludeIndentedStringsInAnalyzerOutput</GetTargetPathDependsOn>
+  </PropertyGroup>
+
+  <Target Name="_IncludeIndentedStringsInAnalyzerOutput" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <TargetPathWithTargetPlatformMoniker Include="@(ReferencePath)"
+                                           Condition="'%(ReferencePath.FileName)' == 'PhotoAtomic.IndentedStrings'"
+                                           IncludeRuntimeDependency="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

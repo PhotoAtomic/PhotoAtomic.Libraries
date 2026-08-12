@@ -1,6 +1,6 @@
 using PhotoAtomic.Clooney;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 [Clonable]
 public partial class ClonableTestModel

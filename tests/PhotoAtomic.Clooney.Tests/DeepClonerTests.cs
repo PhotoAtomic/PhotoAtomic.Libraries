@@ -1,8 +1,8 @@
 using PhotoAtomic.Clooney;
-using PhotoAtomic.Darc.Test.TestGrains;
+using PhotoAtomic.Clooney.Tests.TestGrains;
 using Xunit;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 public class DeepClonerTests
 {

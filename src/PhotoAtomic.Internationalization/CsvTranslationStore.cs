@@ -23,7 +23,11 @@ public sealed class CsvTranslationStore : ITranslationStore
     private const string Header = "key,context,language,template,traits";
 
     private readonly string path;
+#if NET9_0_OR_GREATER
     private readonly Lock writeLock = new();
+#else
+    private readonly object writeLock = new();
+#endif
 
     public CsvTranslationStore(string path) => this.path = path;
 

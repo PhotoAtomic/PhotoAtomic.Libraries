@@ -148,8 +148,9 @@ può passare a versioni indipendenti.
 ### Target framework
 
 - Analyzer/generator e IndentedStrings: `netstandard2.0` (vincolo Roslyn, già così).
-- Internationalization core/AI: proporrei multi-target `net8.0;net10.0` (il core è a zero
-  dipendenze, quasi certamente compila su net8 → più platea). Da verificare in fase 2.
+- Internationalization core: multi-target `net8.0;net10.0` ✅ verificato in Fase 2 (unico
+  aggiustamento: `System.Threading.Lock` dietro `#if NET9_0_OR_GREATER`, `object` su net8).
+  AI resta net10.0 (segue le dipendenze Microsoft.Extensions.AI).
 - DecimalPrecisionExtensions: `netstandard2.0` + eventuale target moderno (v. §6).
 - Tool: `net10.0`.
 
@@ -193,9 +194,20 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
 
 - **Fase 0 — Ricognizione e staging** ✅ (copie verbatim + questo piano)
 - **Fase 1 — Decisioni** ✅ (monorepo; SourceGen separato; lockstep; xUnit)
-- **Fase 2 — Scaffolding build**: slnx, `Directory.Build.props`/`Packages.props`, csproj per
-  IndentedStrings (oggi non ne ha uno), csproj dei progetti di test, porting test a xUnit,
-  pulizie del §4, `dotnet build && dotnet test` verdi.
+- **Fase 2 — Scaffolding build** ✅ (2026-08-12): slnx con path relativi, `global.json`
+  (SDK 10.0.300), `Directory.Build.props` (metadati NuGet comuni + MinVer 7.0.0 lockstep,
+  `IsPackable=false` di default), `Directory.Packages.props` (CPM; Roslyn dei generatori
+  unificato a **4.11.0** — Clooney compilava anche senza il 5.3 che pinnava), csproj di
+  IndentedStrings (netstandard2.0 + System.Memory) e dei due progetti test mancanti, porting
+  StringIndentTests TUnit→xUnit, polyfill resi `internal`, SourceGen passato da Compile-link
+  a ProjectReference + target di flusso analyzer, namespace `SkipCloneAttribute` unificato a
+  `PhotoAtomic.Clooney`. **Bug latente scoperto e corretto**: `ClonableGenerator` cercava
+  l'attributo come `PhotoAtomic.DeepCloner.SkipCloneAttribute` (vecchio nome del progetto),
+  quindi `[SkipClone]` non veniva mai rilevato — anche in Darc; ora il test dedicato lo
+  verifica. Esito: `dotnet build` 0 warning / 0 errori, **232 test verdi** (7 IndentedStrings,
+  89 Clooney, 111 i18n, 18 SourceGen, 7 Tool). Nota per la Fase 4: il codice *generato* da
+  Clooney emette warning CS0108/CS8602 nei consumatori (visibili nei test) — da ripulire
+  quando si modernizzano i generatori.
 - **Fase 3 — Repo GitHub + CI + pubblicazione**: creazione `PhotoAtomic/PhotoAtomic.Libraries`,
   workflow CI (modello: quello di Nyota), pack in ordine di grafo, push su nuget.org al tag
   (serve la tua API key NuGet come secret `NUGET_API_KEY`).

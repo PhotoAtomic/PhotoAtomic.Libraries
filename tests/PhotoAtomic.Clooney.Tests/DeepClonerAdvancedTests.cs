@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using PhotoAtomic.Clooney;
 using Xunit;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 public class DeepClonerAdvancedTests
 {

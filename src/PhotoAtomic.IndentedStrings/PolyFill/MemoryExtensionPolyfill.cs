@@ -4,7 +4,7 @@
 using System;
 using System.Text;
 
-public static class StringBuilderExtensions
+internal static class StringBuilderExtensions
 {
     public static void Append(this StringBuilder stringBuilder, ReadOnlySpan<char> part)
     {
@@ -12,14 +12,14 @@ public static class StringBuilderExtensions
     }
 }
 
-public static class SpanExtensions
+internal static class SpanExtensions
 {
     public static SpanSplitEnumerator<T> SplitAfter<T>(this ReadOnlySpan<T> source, T separator)
          where T : IEquatable<T>
          => new SpanSplitEnumerator<T>(source, separator);
 }
 
-public ref struct SpanSplitEnumerator<T>
+internal ref struct SpanSplitEnumerator<T>
      where T : IEquatable<T>
 {
     private ReadOnlySpan<T> span;

@@ -2,7 +2,7 @@ using PhotoAtomic.Clooney;
 using System.Linq;
 using Xunit;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 /// <summary>
 /// Tests to demonstrate that partial classes marked with [Clonable], [Hashable], and [Diffable]

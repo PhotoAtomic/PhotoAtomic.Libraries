@@ -1,27 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using static Nyota.Helpers.IndentedInterpolatedStringHandler;
+using static PhotoAtomic.IndentedStrings.IndentedInterpolatedStringHandler;
 
-namespace Nyota.Tests;
+namespace PhotoAtomic.IndentedStrings.Tests;
 public class StringIndentTests
 {
-	[Test]
-	public async Task StringIndentTestAsync()
+	[Fact]
+	public void StringIndentTest()
 	{
 		string text = Indent($$"""
 			a a a a
 				{{GenerateC()}}
 			b b b b 
 			""");
-		await Assert.That(text).IsEqualTo("""
+		Assert.Equal("""
 			a a a a
 				C C C
 				D D D
 			b b b b 
-			""");
+			""", text);
 	}
 
 	private static string GenerateC()
@@ -32,8 +28,8 @@ public class StringIndentTests
 			"""");
 	}
 
-	[Test]
-	public async Task SplitterEnumTestAsync()
+	[Fact]
+	public void SplitterEnumTest()
 	{
 		var splitter = "abc\ndefg xxx\nUUU".AsSpan().SplitAfter('\n');
 		splitter.MoveNext();
@@ -43,16 +39,16 @@ public class StringIndentTests
 		splitter.MoveNext();
 		var part3 = splitter.Current.ToString();
 
-		await Assert.That(splitter.MoveNext()).IsFalse();
+		Assert.False(splitter.MoveNext());
 
-		await Assert.That(part1).IsEqualTo("abc\n");
-		await Assert.That(part2).IsEqualTo("defg xxx\n");
-		await Assert.That(part3).IsEqualTo("UUU");
+		Assert.Equal("abc\n", part1);
+		Assert.Equal("defg xxx\n", part2);
+		Assert.Equal("UUU", part3);
 	}
 
 
-	[Test]
-	public async Task ComplexCodeLikeIndentTestAsync()
+	[Fact]
+	public void ComplexCodeLikeIndentTest()
 	{
 		var cases = Indent($$""""
 			case "a":
@@ -125,12 +121,12 @@ public class StringIndentTests
 			}
 			"""";
 
-		await Assert.That(res).IsEqualTo(expected);
+		Assert.Equal(expected, res);
 	}
 
 
-	[Test]
-	public async Task SupressLineWithNullTestAsync()
+	[Fact]
+	public void SupressLineWithNullTest()
 	{
 		string? cases = null;
 
@@ -150,12 +146,12 @@ public class StringIndentTests
 			"""";
 
 		string res = sw;
-		await Assert.That(res).IsEqualTo(expected);
+		Assert.Equal(expected, res);
 
 	}
 
-	[Test]
-	public async Task LeaveEmptyLineWithNullTestAsync()
+	[Fact]
+	public void LeaveEmptyLineWithNullTest()
 	{		
 
 		var sw = Indent($$""""
@@ -175,12 +171,12 @@ public class StringIndentTests
 			"""";
 
 		string res = sw;
-		await Assert.That(res).IsEqualTo(expected);
+		Assert.Equal(expected, res);
 
 	}
 
-	[Test]
-	public async Task ConcatenateMultipleIndentInStringBuilderAsync()
+	[Fact]
+	public void ConcatenateMultipleIndentInStringBuilder()
 	{
 		string[] choices = ["a", "b"];
 		var caseBuilder = new StringBuilder();
@@ -220,16 +216,16 @@ public class StringIndentTests
 			}			
 			"""";
 		
-		await Assert.That(switchCode.ToString()).IsEqualTo(expected);
+		Assert.Equal(expected, switchCode.ToString());
 	}
 
-	[Test]
-	public async Task SimpleStringLiteralAsync()
+	[Fact]
+	public void SimpleStringLiteral()
 	{
 		string? pre = null;
 		pre = "pre ";
 		var combined = Indent($$""""{{pre}}value another"""");
 
-		await Assert.That(combined.ToString()).IsEqualTo("pre value another");
+		Assert.Equal("pre value another", combined.ToString());
 	}
 }

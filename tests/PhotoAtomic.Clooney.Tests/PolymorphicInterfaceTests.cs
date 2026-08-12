@@ -2,7 +2,7 @@ using PhotoAtomic.Clooney;
 using System.Linq;
 using Xunit;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 /// <summary>
 /// Tests to verify that interface methods on partial base classes correctly dispatch

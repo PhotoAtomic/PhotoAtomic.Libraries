@@ -1,6 +1,6 @@
 using System;
 
-namespace PhotoAtomic.Clooney.Abstractions;
+namespace PhotoAtomic.Clooney;
 
 /// <summary>
 /// Marks a property to be excluded from cloning.

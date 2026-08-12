@@ -3,22 +3,20 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-    <RootNamespace>PhotoAtomic.SourceGen.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\PhotoAtomic.Internationalization.SourceGen\PhotoAtomic.Internationalization.SourceGen.csproj" />
-    <ProjectReference Include="..\..\src\PhotoAtomic.Internationalization\PhotoAtomic.Internationalization.csproj" />
+    <!-- Clooney agganciato come lo aggancerebbe un consumatore: solo analyzer.
+         I tipi runtime (attributi, contesti, DifferencePath) vengono da Abstractions. -->
+    <ProjectReference Include="..\..\src\PhotoAtomic.Clooney\PhotoAtomic.Clooney.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\PhotoAtomic.Clooney.Abstractions\PhotoAtomic.Clooney.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

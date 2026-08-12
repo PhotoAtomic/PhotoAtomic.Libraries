@@ -1,6 +1,6 @@
 using PhotoAtomic.Clooney;
 
-namespace PhotoAtomic.Darc.Test;
+namespace PhotoAtomic.Clooney.Tests;
 
 // Base classes - WITH attributes to trigger extension method generation
 // BUT interface implementations are manual in PolymorphicTestModels.Interfaces.cs
