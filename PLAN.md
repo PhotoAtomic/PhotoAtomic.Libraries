@@ -217,9 +217,14 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
   auto-convertite dalle ProjectReference. **Restano**: push di `main` (ff-merge dell'utente),
   default branch, secret `NUGET_API_KEY` su GitHub (serve l'API key dell'utente), primo tag.
 - **Fase 4 — Raccolta razionale di tutte le librerie riusabili** (prima della migrazione!):
-  - **DecimalPrecisionExtensions** — già importata con storia completa in
-    `staging/import/DecimalPrecisionExtensions/`; modernizzazione secondo §6, poi archiviazione
-    del vecchio repo GitHub con puntatore.
+  - **DecimalPrecisionExtensions** ✅ (2026-08-12) — modernizzata secondo §6 in
+    `src/PhotoAtomic.DecimalPrecisionExtensions/` (netstandard2.0+net8.0, namespace storico
+    `PhotoAtomic.Numerics` confermato): Chunk/LeftFill/RightFill **eliminati del tutto** (la
+    nuova implementazione ricompone il significando aritmeticamente, niente byte-chunking),
+    `BigInteger.Pow` al posto di `(int)Math.Pow` (che andava in overflow oltre 10^9: bug
+    storico), significando costruito senza il bug del segno sul bit 95, `decimal.Scale` e
+    `GetBits(Span)` su net8. Test portati a xUnit + regressioni (14 verdi). Resta solo
+    l'archiviazione del vecchio repo GitHub dopo la pubblicazione.
   - **Libreria datafile** (lettura/scrittura file excel-like) — da mostrare e valutare assieme.
   - **Libreria MVVM** — da rimodernare prima dell'inclusione (property `field` di C#, feature
     .NET 10, ecc.): entra quando è pronta, senza fretta.

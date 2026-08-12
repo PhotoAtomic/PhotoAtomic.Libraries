@@ -3,6 +3,7 @@
     <Project Path="src/PhotoAtomic.IndentedStrings/PhotoAtomic.IndentedStrings.csproj" />
     <Project Path="src/PhotoAtomic.Clooney.Abstractions/PhotoAtomic.Clooney.Abstractions.csproj" />
     <Project Path="src/PhotoAtomic.Clooney/PhotoAtomic.Clooney.csproj" />
+    <Project Path="src/PhotoAtomic.DecimalPrecisionExtensions/PhotoAtomic.DecimalPrecisionExtensions.csproj" />
     <Project Path="src/PhotoAtomic.Internationalization/PhotoAtomic.Internationalization.csproj" />
     <Project Path="src/PhotoAtomic.Internationalization.AI/PhotoAtomic.Internationalization.AI.csproj" />
     <Project Path="src/PhotoAtomic.Internationalization.SourceGen/PhotoAtomic.Internationalization.SourceGen.csproj" />
@@ -11,6 +12,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/PhotoAtomic.IndentedStrings.Tests/PhotoAtomic.IndentedStrings.Tests.csproj" />
     <Project Path="tests/PhotoAtomic.Clooney.Tests/PhotoAtomic.Clooney.Tests.csproj" />
+    <Project Path="tests/PhotoAtomic.DecimalPrecisionExtensions.Tests/PhotoAtomic.DecimalPrecisionExtensions.Tests.csproj" />
     <Project Path="tests/PhotoAtomic.Internationalization.Tests/PhotoAtomic.Internationalization.Tests.csproj" />
     <Project Path="tests/PhotoAtomic.Internationalization.SourceGen.Tests/PhotoAtomic.Internationalization.SourceGen.Tests.csproj" />
     <Project Path="tests/PhotoAtomic.Internationalization.Tool.Tests/PhotoAtomic.Internationalization.Tool.Tests.csproj" />

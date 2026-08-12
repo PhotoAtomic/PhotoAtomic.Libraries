@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <!-- Namespace storico del repo originale: nessun breaking per i consumatori esistenti,
+         e pronto ad accogliere future estensioni numeriche. -->
+    <RootNamespace>PhotoAtomic.Numerics</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Decimal extensions for significant zeros: SetPrecision, RoundWithPrecision and GetPrecision manipulate the scale of System.Decimal directly on its binary representation — no string round-trips. 123.4m.SetPrecision(3) is 123.400, SetPrecision(-1) zeroes integral digits.</Description>
+    <PackageTags>decimal;precision;scale;rounding;significant-digits;numerics</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
