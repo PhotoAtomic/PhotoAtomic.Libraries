@@ -11,7 +11,22 @@
     <!-- Release tracking files are packaging ceremony we do not need yet. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>
     <RootNamespace>PhotoAtomic.SourceGen</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Opt-in compile-time companion for PhotoAtomic.Internationalization: generates the translation catalog from your T($"...") call sites and ships the PAI18N001 analyzer that flags unresolvable contexts. Install next to the core package.</Description>
+    <PackageTags>i18n;internationalization;source-generator;roslyn;analyzer</PackageTags>
+    <!-- Pacchetto analyzer: niente lib/, le dll viaggiano in analyzers/dotnet/cs;
+         nessun symbol package (non ci sono pdb nel build output impacchettato). -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Il generatore e la sua dipendenza privata IndentedStrings nel load context analyzer
+         dei consumatori (equivalente NuGet del target _IncludeIndentedStringsInAnalyzerOutput). -->
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(OutputPath)PhotoAtomic.IndentedStrings.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />

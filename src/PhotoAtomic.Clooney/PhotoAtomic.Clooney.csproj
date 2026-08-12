@@ -2,12 +2,25 @@
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
-		<LangVersion>latest</LangVersion>
 		<EnforceExtendedAnalyzerRules>false</EnforceExtendedAnalyzerRules>
-		<Nullable>enable</Nullable>
 		<RootNamespace>PhotoAtomic.Clooney</RootNamespace>
 		<AssemblyName>PhotoAtomic.Clooney</AssemblyName>
+		<IsPackable>true</IsPackable>
+		<Description>Roslyn source generators for deep clone ([Clonable]), structural diff ([Diffable]) and structural hash ([Hashable]) with cycle handling. The runtime types come from the PhotoAtomic.Clooney.Abstractions dependency.</Description>
+		<PackageTags>source-generator;roslyn;clone;deep-clone;diff;hash</PackageTags>
+		<!-- Pacchetto analyzer: niente lib/, le dll viaggiano in analyzers/dotnet/cs;
+		     nessun symbol package (non ci sono pdb nel build output impacchettato). -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<IncludeSymbols>false</IncludeSymbols>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Il generatore e la sua dipendenza privata IndentedStrings nel load context analyzer
+		     dei consumatori (equivalente NuGet del target _IncludeIndentedStringsInAnalyzerOutput). -->
+		<None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+		<None Include="$(OutputPath)PhotoAtomic.IndentedStrings.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />

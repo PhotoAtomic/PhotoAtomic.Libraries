@@ -208,9 +208,14 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
   89 Clooney, 111 i18n, 18 SourceGen, 7 Tool). Nota per la Fase 4: il codice *generato* da
   Clooney emette warning CS0108/CS8602 nei consumatori (visibili nei test) — da ripulire
   quando si modernizzano i generatori.
-- **Fase 3 — Repo GitHub + CI + pubblicazione**: creazione `PhotoAtomic/PhotoAtomic.Libraries`,
-  workflow CI (modello: quello di Nyota), pack in ordine di grafo, push su nuget.org al tag
-  (serve la tua API key NuGet come secret `NUGET_API_KEY`).
+- **Fase 3 — Repo GitHub + CI + pubblicazione** (in corso, 2026-08-12): repo pubblico
+  https://github.com/PhotoAtomic/PhotoAtomic.Libraries creato ✅; metadati di pack su tutti e 7
+  i progetti ✅ (analyzer layout `analyzers/dotnet/cs` con IndentedStrings embedded per Clooney
+  e SourceGen, `PackAsTool` con comando `pai18n` per il Tool, README impacchettati dove esistono);
+  LICENSE MIT + README di repo ✅; workflow CI ✅ (build+test su push/PR; pack+push su tag `v*`,
+  `fetch-depth: 0` per MinVer). `dotnet pack` verificato localmente: 7 nupkg corretti, dipendenze
+  auto-convertite dalle ProjectReference. **Restano**: push di `main` (ff-merge dell'utente),
+  default branch, secret `NUGET_API_KEY` su GitHub (serve l'API key dell'utente), primo tag.
 - **Fase 4 — Raccolta razionale di tutte le librerie riusabili** (prima della migrazione!):
   - **DecimalPrecisionExtensions** — già importata con storia completa in
     `staging/import/DecimalPrecisionExtensions/`; modernizzazione secondo §6, poi archiviazione

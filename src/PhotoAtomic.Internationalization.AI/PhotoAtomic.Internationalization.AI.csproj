@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <!-- Same namespace family as the core i18n library. -->
     <RootNamespace>PhotoAtomic</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>AI-powered translation filler for PhotoAtomic.Internationalization: completes missing catalog entries in the background via Microsoft.Extensions.AI (OpenAI-compatible providers). Kept separate so the core stays dependency-free.</Description>
+    <PackageTags>i18n;internationalization;translation;ai;openai</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

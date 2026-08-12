@@ -3,7 +3,15 @@
   <PropertyGroup>
     <!-- netstandard2.0: deve poter girare dentro il load context degli analyzer Roslyn. -->
     <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <Description>Interpolated string handler that preserves indentation: write nested, readable code templates with Indent($"...") — ideal for Roslyn source generators and any structured text emission.</Description>
+    <PackageTags>interpolated-string;indentation;source-generator;codegen;templates</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Porta ReadOnlySpan<T> su netstandard2.0; l'host del compilatore la fornisce a runtime. -->

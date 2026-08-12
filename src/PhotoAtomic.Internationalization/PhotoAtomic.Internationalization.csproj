@@ -7,6 +7,14 @@
     <!-- Class Internationalization lives in namespace PhotoAtomic so that
          `using static PhotoAtomic.Internationalization;` exposes bare I(...) -->
     <RootNamespace>PhotoAtomic</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Structural-key internationalization with zero dependencies: translate with T($"...") through a facts/criteria grammar engine (CLDR plurals, gender, elision), CSV translation store, ambient culture via AsyncLocal and background fill hooks. Add PhotoAtomic.Internationalization.SourceGen for the compile-time catalog.</Description>
+    <PackageTags>i18n;internationalization;localization;translation;plural-rules</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

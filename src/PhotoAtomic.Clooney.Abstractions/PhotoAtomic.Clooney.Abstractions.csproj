@@ -2,10 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
     <RootNamespace>PhotoAtomic.Clooney.Abstractions</RootNamespace>
     <AssemblyName>PhotoAtomic.Clooney.Abstractions</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <Description>Runtime abstractions for PhotoAtomic.Clooney: the [Clonable]/[Diffable]/[Hashable] attributes, the IClonable/IDifferentiable/IHashable interfaces, clone/diff/hash contexts for cyclic graphs, and the DifferencePath model.</Description>
+    <PackageTags>clone;deep-clone;diff;hash;source-generator</PackageTags>
   </PropertyGroup>
 
 </Project>

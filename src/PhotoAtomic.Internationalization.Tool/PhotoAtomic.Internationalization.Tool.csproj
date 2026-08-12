@@ -24,6 +24,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>pai18n</ToolCommandName>
+    <Description>dotnet tool companion for PhotoAtomic.Internationalization: extracts the catalog from a csproj (Razor included), pre-translates missing entries and verifies catalog completeness. Install with `dotnet tool install PhotoAtomic.Internationalization.Tool`.</Description>
+    <PackageTags>i18n;internationalization;dotnet-tool;translation;cli</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
