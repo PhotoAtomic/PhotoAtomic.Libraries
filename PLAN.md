@@ -206,10 +206,15 @@ passano così: documentare il comportamento o sistemarlo con un test di regressi
   - **Libreria datafile** (lettura/scrittura file excel-like) — da mostrare e valutare assieme.
   - **Libreria MVVM** — da rimodernare prima dell'inclusione (property `field` di C#, feature
     .NET 10, ecc.): entra quando è pronta, senza fretta.
-  - Candidati già individuati nei repo esplorati: `EquatableArray<T>` (Nyota), `ContextResolver`
-    (risoluzione di costanti stringa a compile time), `ProjectCatalogReader` (MSBuildWorkspace su
-    csproj inclusi alberi Razor), il target MSBuild di flusso analyzer → possibile
-    `PhotoAtomic.Generators.Toolkit`; `DifferencePath` usabile anche standalone.
+  - **`PhotoAtomic.Generators.Toolkit`** (nome da confermare): pacchetto **source-only**
+    (consegna `.cs` come compile items, niente dll da trasportare nel load context analyzer)
+    per chi scrive generatori. Inquilini decisi: `EquatableArray<T>` (Nyota — serve a ogni
+    generatore incrementale, Nyota stessa la consumerà in Fase 5) e il target MSBuild di
+    flusso analyzer (oggi copiato nel csproj di Clooney). Decisioni 2026-08-12:
+    `ContextResolver` **resta dentro Internationalization.SourceGen** (un solo consumatore,
+    troppo specifico per ora — rivalutare solo se comparirà un secondo generatore che ne ha
+    bisogno); `ProjectCatalogReader` resta nel Tool i18n; `DifferencePath` resta in
+    Clooney.Abstractions (già lì, usabile anche standalone: basta documentarlo).
   - Snapshot test dei generatori (Verify/Microsoft.CodeAnalysis.Testing): oggi Clooney e
     SourceGen sono testati solo indirettamente.
 - **Fase 5 (ULTIMA) — Migrazione dei consumatori**: Darc, PartyOf2 e Nyota sostituiscono le copie
