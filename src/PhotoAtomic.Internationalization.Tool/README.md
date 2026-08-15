@@ -23,4 +23,9 @@ assembly. Filling uses the same AI translation pipeline as
 (configure the provider via appsettings / user secrets / environment variables); `--verify` is
 meant for pipelines, so a missing translation breaks the build instead of surprising a user.
 
+Before filling, the tool builds a `ValueVocabulary` from the values already in the CSV and
+reports the trait combinations it found per language. Those are what the sentence variants get
+asked for, so a run over a store whose values are already translated produces sharper sentence
+rows than one over an empty file — rerunning after the values land is worth it.
+
 Part of [PhotoAtomic.Libraries](https://github.com/PhotoAtomic/PhotoAtomic.Libraries).

@@ -121,6 +121,44 @@ public static class Internationalization
         return legend;
     }
 
+    /// <summary>
+    /// Translates a VALUE on its own — a label, a list entry, an item name in
+    /// the UI — instead of inside a sentence. Values live in the table by
+    /// content, with their traits; asking for one through a sentence key like
+    /// "{0}" would invite a translator to wrap it in an article, which is
+    /// exactly what values must never carry. Untranslated values render as
+    /// they are, so English always works.
+    /// </summary>
+    public static string Value(object? value, string? context = null)
+    {
+        if (value is null)
+        {
+            return string.Empty;
+        }
+
+        var language = Language;
+        var rendered = Convert.ToString(value, ResolveCulture(language)) ?? string.Empty;
+
+        var facts = new HashSet<string>(ParseTags(context), StringComparer.Ordinal);
+        if (ContextsOf(value) is { } contexts)
+        {
+            foreach (var typeContext in contexts)
+            {
+                facts.Add(typeContext);
+            }
+        }
+
+        if (BestRow(rendered, language, facts) is not { } row)
+        {
+            QueueFill(rendered, language, [], facts);
+            return rendered;
+        }
+
+        return row.Traits.Contains(WellKnownTraits.Capitalize) && row.Template.Length > 0
+            ? ResolveCulture(language).TextInfo.ToUpper(row.Template[0]) + row.Template[1..]
+            : row.Template;
+    }
+
     /// <summary>Translates and renders an interpolated string for the ambient language.</summary>
     public static string T(TranslationInterpolatedStringHandler text, string? context = null)
     {
@@ -224,11 +262,25 @@ public static class Internationalization
 
         var template = sentenceRow?.Template ?? text.Key;
 
-        var sentence = string.Format(culture, template, holes);
+        string sentence;
+        try
+        {
+            sentence = string.Format(culture, template, holes);
+        }
+        catch (FormatException)
+        {
+            // A malformed row — typically a machine translation that invented
+            // a hole the sentence does not have — must never take the screen
+            // down: the source template always renders.
+            sentence = string.Format(culture, text.Key, holes);
+        }
 
-        // Positional capitalization is mechanics, not translation: the engine
-        // uppercases sentence openings so values can stay lowercase.
-        return GrammarRules.ApplySentenceCapitalization(sentence, language);
+        // Grammar mechanics, not translation: elision contracts the little
+        // words in front of the vowels the values happened to bring, and
+        // positional capitalization uppercases sentence openings so values
+        // can stay lowercase. Elision first — it may change the first word.
+        return GrammarRules.ApplySentenceCapitalization(
+            GrammarRules.ApplyElision(sentence, language), language);
     }
 
     /// <summary>

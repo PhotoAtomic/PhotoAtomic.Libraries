@@ -29,8 +29,9 @@ public class MemberContextTests
         Language = "it-IT";
         var played = Instrument.Organ;
 
-        // Both rows match; the member context makes the two-criteria row win.
-        Assert.Equal("Suoni il organo", T($"You play the {played}"));
+        // Both rows match; the member context makes the two-criteria row win —
+        // and the engine elides the article in front of the vowel it brought.
+        Assert.Equal("Suoni l'organo", T($"You play the {played}"));
     }
 
     [Fact]

@@ -45,6 +45,16 @@ public sealed class CsvTranslationStore : ITranslationStore
             content = reader.ReadToEnd();
         }
 
+        return Parse(content);
+    }
+
+    /// <summary>
+    /// Reads rows out of CSV text, without touching a filesystem: hosts that
+    /// have none (a WebAssembly client fetching the table over HTTP) share the
+    /// exact same format as the file store.
+    /// </summary>
+    public static IReadOnlyList<TranslationRow> Parse(string content)
+    {
         var rows = new List<TranslationRow>();
         foreach (var record in ParseRecords(content))
         {

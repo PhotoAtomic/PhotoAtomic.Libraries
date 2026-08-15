@@ -10,6 +10,13 @@ provider. Every translation request carries the structural information the core 
 collects — facts, criteria, context, the legend of each placeholder — so the model translates
 with grammar-aware instructions instead of a bare string.
 
+The grammatical cases a sentence needs are computed here, not left to the model:
+`ValueVocabulary` observes which trait combinations the language's already-translated values
+declare (and a real word for each), `VariantCases` turns them into the exact list of rows to
+produce, and each case is asked for by name, one call at a time, with its example word already
+sitting inside the placeholder. Answers are verified hole by hole and asked again when a
+placeholder went missing, was invented, or an example word leaked into the template.
+
 ## Installing
 
 ```

@@ -83,12 +83,24 @@ agreement and elision:
 rotta"**; with 2 keys, `T($"{count} broken {item}")` renders **"2 chiavi
 rotte"** — value plural and sentence agreement both selected mechanically.
 
+A translated row that invented a hole the sentence does not have would throw at
+render time; the engine catches that and falls back to the source template, so a
+bad row never takes the screen down.
+
 ### `[Translatable]` — values translated by content
 
 Sentences translate by structure; values of marked types translate by
 *content*: their rendered text is looked up as a key of its own
 ("Red" → "Rosso"). The attribute takes an optional context, allows multiple,
 and applies to enum members too (member contexts add to type contexts).
+
+### `Value(value, context?)` — a value on its own
+
+`T($"{item}")` would invite a translator to wrap the value in an article, which
+is exactly what values must never carry. `Value(item)` translates a value
+outside any sentence — a label, a list entry, an item name in the UI — looking
+it up by content with its traits, honouring `Capitalize`, and queueing a
+background fill on a miss. Untranslated values render as they are.
 
 ### `PluralRules` — CLDR categories, no AI
 
@@ -99,7 +111,7 @@ for Arabic (all six, modulo 100), Welsh (six is `many`!), Scottish Gaelic
 `one`), and the one/other default. `CategoriesOf(language)` lists what a
 language distinguishes — used as an explicit checklist in AI prompts.
 
-### `GrammarRules` and `WellKnownTraits` — capitalization
+### `GrammarRules` and `WellKnownTraits` — capitalization and elision
 
 Values are stored lowercase. The trait `Capitalize` keeps an uppercase initial
 everywhere (proper names, German nouns). Everything positional is mechanics:
@@ -107,6 +119,17 @@ everywhere (proper names, German nouns). Everything positional is mechanics:
 letters after `.` `!` `?`, transparently through quotes, leaving digit-led
 sentences alone ("2 chiavi rotte"). `WellKnownTraits` holds the conventional
 vocabulary: `GENDER-male`, `GENDER-female`, `starts-with-vowel`, `Capitalize`.
+
+Elision is mechanics too, and applied after rendering:
+`GrammarRules.ApplyElision` contracts the little words that must give way
+before a vowel — "mette la acqua" → "mette l'acqua", "le pot de eau" → "le pot
+d'eau" — keeping the capitalization of the word it replaces ("La" → "L'").
+Italian and French are covered; languages without elision pass through
+untouched. `StartsWithVowelSound(text, language)` is the underlying test, aware
+of the silent H of Italian, French, Spanish, Portuguese and Catalan, and of
+accented vowels. Doing this deterministically keeps the rows few: translators —
+human or AI — spend their attention on gender and meaning, not on one variant
+per initial letter.
 
 ### `Language` — ambient and async-safe
 
@@ -121,6 +144,9 @@ registration. The CSV store is RFC 4180 with a header
 real newlines allowed — it opens cleanly in any spreadsheet. Append-only:
 the last row for equal specificity wins, so a bad row is fixed by appending a
 better one. Reads are eager with permissive sharing (concurrent append/load safe).
+`CsvTranslationStore.Parse(content)` reads the same format out of a string,
+for hosts that have no filesystem — a WebAssembly client fetching the table
+over HTTP shares the file store's format exactly.
 
 ### Runtime AI fill — `ITranslator` / `UseTranslator`
 
@@ -136,7 +162,7 @@ path that makes runtime-generated content translatable at all.
 
 `AiTranslator` implements `ITranslator` on `IChatClient`
 (Microsoft.Extensions.AI), so any provider fits;
-`ForOpenAiCompatibleEndpoint(endpoint, apiKey, model, systemPrompt?, applicationContext?)`
+`ForOpenAiCompatibleEndpoint(endpoint, apiKey, model, systemPrompt?, applicationContext?, vocabulary?)`
 connects to e.g. Azure AI Foundry. The prompt teaches the row format and the
 exact tag vocabulary, and includes hard-won rules:
 
@@ -151,6 +177,35 @@ exact tag vocabulary, and includes hard-won rules:
 `applicationContext` is additive — "a point-and-click adventure game" steers
 word senses and tone without losing the format rules. Parsing is tolerant
 (markdown fences, garbage answers → no rows).
+
+### The program owns the combinatorics, the model owns the grammar
+
+Enumerating which grammatical cases a sentence needs is bookkeeping, and a
+model asked to do it either forgets cases or invents hundreds. So
+`VariantCases.For(request, vocabulary?)` computes them — one case per real
+situation, capped at `MaxCases` by narrowing the widest axis to its plainest
+states rather than truncating the list — and each is then asked for **by name,
+one per call**.
+
+The states of a hole are not a hardcoded list of genders: `ValueVocabulary`
+(`FromStore` / `FromRows`) observes the trait combinations the language's
+already-translated **values** actually declared, and keeps a real word for
+each. So a language carrying traits nobody anticipated — vowel harmony, impure
+S, a noun class system — still gets one case per situation, with a concrete
+example attached. Translate values first; the sentences then ask for exactly
+the cases those words can produce.
+
+The sentence reaches the model with the word already inside each hole —
+`"You have {0:'3'} coins in your {1:'borsa'}"` — and the model writes the
+translation *around* the braces. It never has to put a placeholder back, and
+every answer is verified hole by hole: a dissolved placeholder, an invented
+one, or an example word that leaked outside its brace ("infila la {1} nel
+falò") is rejected and asked again. The first accepted wording leads the
+others, so the app does not switch verbs depending on the gender of an object.
+
+Two traits are derived rather than asked, because they are mechanical and
+models forget them: `starts-with-vowel` on a value that begins with one, and
+the unconditional generic row for a value answered only in plural variants.
 
 ---
 
@@ -186,7 +241,9 @@ tool <assembly.dll | project.csproj> [--csv <path>] [--verify]
   `SiteExtraction` brain guarantees parity with the generator).
 - **fill** (default): translates delta-style — (key, language) pairs already
   in the CSV are skipped; reruns only pay for what is new. Limited parallelism,
-  failures counted, exit 2 on any.
+  failures counted, exit 2 on any. It first builds the `ValueVocabulary` from
+  the values already in the store and prints what it found per language, so
+  sentence variants are asked for against real words.
 - **`--verify`**: no AI, no network — checks that every unit has rows for every
   configured language; prints each missing pair and exits 3. The CI gate.
 

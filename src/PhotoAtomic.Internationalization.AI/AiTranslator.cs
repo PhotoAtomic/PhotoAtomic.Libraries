@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
@@ -14,7 +15,11 @@ namespace PhotoAtomic;
 /// category names for plurals, free trait tags (male, female,
 /// starts-with-vowel) for grammar.
 /// </summary>
-public sealed class AiTranslator(IChatClient chatClient, string? systemPrompt = null, string? applicationContext = null) : ITranslator
+public sealed class AiTranslator(
+    IChatClient chatClient,
+    string? systemPrompt = null,
+    string? applicationContext = null,
+    ValueVocabulary? vocabulary = null) : ITranslator
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -25,7 +30,13 @@ public sealed class AiTranslator(IChatClient chatClient, string? systemPrompt = 
     /// deployment). Accepts the endpoint with or without the trailing
     /// /chat/completions segment.
     /// </summary>
-    public static AiTranslator ForOpenAiCompatibleEndpoint(Uri endpoint, string apiKey, string model, string? systemPrompt = null, string? applicationContext = null)
+    public static AiTranslator ForOpenAiCompatibleEndpoint(
+        Uri endpoint,
+        string apiKey,
+        string model,
+        string? systemPrompt = null,
+        string? applicationContext = null,
+        ValueVocabulary? vocabulary = null)
     {
         var baseEndpoint = new Uri(endpoint.AbsoluteUri.Replace("/chat/completions", string.Empty).TrimEnd('/'));
 
@@ -33,15 +44,115 @@ public sealed class AiTranslator(IChatClient chatClient, string? systemPrompt = 
             .GetChatClient(model)
             .AsIChatClient();
 
-        return new AiTranslator(client, systemPrompt, applicationContext);
+        return new AiTranslator(client, systemPrompt, applicationContext, vocabulary);
     }
 
     public async Task<IReadOnlyList<TranslationRow>> TranslateAsync(TranslationRequest request, CancellationToken cancellationToken = default)
     {
+        // Sentences whose holes host translated values need one row per
+        // grammatical case, and the model cannot be trusted to enumerate them:
+        // left free it either forgets to decline or explodes into every
+        // combination it can imagine. So WE compute the cases and ask for them
+        // by name, one small batch at a time, then chase the missing ones.
+        var cases = VariantCases.For(request, vocabulary);
+        return cases.Count > 0
+            ? await TranslateByCasesAsync(request, cases, cancellationToken)
+            : await AskAsync(request, BuildUserPrompt(request), cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<TranslationRow>> TranslateByCasesAsync(
+        TranslationRequest request,
+        IReadOnlyList<VariantCase> cases,
+        CancellationToken cancellationToken)
+    {
+        var rows = new Dictionary<string, TranslationRow>(StringComparer.Ordinal);
+
+        // The wording of the first accepted variant leads the others: asked in
+        // isolation, a model happily picks a different verb every time
+        // ("mette in tasca", "si intasca", "infila in tasca") and the game
+        // starts speaking differently depending on the gender of an object.
+        string? lead = null;
+
+        foreach (var batch in cases.Chunk(CasesPerCall))
+        {
+            foreach (var row in await AskAsync(request, BuildCasesPrompt(request, batch, lead), cancellationToken))
+            {
+                if (Accept(row, request, batch) is { } accepted)
+                {
+                    rows[VariantCases.Normalize(accepted.Context)] = accepted;
+                    lead ??= accepted.Template;
+                }
+            }
+
+            // Whatever the batch skipped is asked again on its own: a single
+            // case per call is the most explicit instruction we can give.
+            foreach (var missing in batch.Where(variant => !rows.ContainsKey(VariantCases.Normalize(variant.Criteria))))
+            {
+                foreach (var row in await AskAsync(request, BuildCasesPrompt(request, [missing], lead), cancellationToken))
+                {
+                    if (Accept(row, request, [missing]) is { } accepted)
+                    {
+                        rows[VariantCases.Normalize(accepted.Context)] = accepted;
+                        lead ??= accepted.Template;
+                    }
+                }
+            }
+        }
+
+        // Keep only the cases we asked for, under OUR criteria: no stray rows.
+        return cases
+            .Where(variant => rows.ContainsKey(VariantCases.Normalize(variant.Criteria)))
+            .Select(variant => rows[VariantCases.Normalize(variant.Criteria)] with { Context = variant.Criteria })
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Checks a row against the case it answers and strips the annotations
+    /// back to plain holes. Rejected — so the caller asks again — when a hole
+    /// did not come home, or when an example word leaked outside its brace
+    /// (the classic "infila la {1} nel falò", where the second example stayed
+    /// in the template and every future sentence would mention that bonfire).
+    /// </summary>
+    private static TranslationRow? Accept(TranslationRow row, TranslationRequest request, IReadOnlyList<VariantCase> asked)
+    {
+        var template = Deannotate(row.Template);
+
+        var holes = HolePattern.Matches(request.Key).Select(match => match.Value).Distinct().ToList();
+        if (holes.Any(hole => !template.Contains(hole, StringComparison.Ordinal)))
+        {
+            return null; // a placeholder was dissolved into the sentence
+        }
+
+        // ...and none invented: a hole the sentence does not have would throw
+        // at render time, taking the whole screen down with it.
+        if (HolePattern.Matches(template).Any(match => !holes.Contains(match.Value, StringComparer.Ordinal)))
+        {
+            return null;
+        }
+
+        var examples = asked
+            .SelectMany(variant => variant.Examples.Values)
+            .Where(example => example.Length > 2) // digits and tiny words match too easily
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        var bare = HolePattern.Replace(template, string.Empty);
+        if (examples.Any(example => bare.Contains(example, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null; // an example word stayed in the template
+        }
+
+        return row with { Template = template };
+    }
+
+    private async Task<IReadOnlyList<TranslationRow>> AskAsync(
+        TranslationRequest request,
+        string userPrompt,
+        CancellationToken cancellationToken)
+    {
         List<ChatMessage> messages =
         [
             new(ChatRole.System, effectiveSystemPrompt),
-            new(ChatRole.User, BuildUserPrompt(request)),
+            new(ChatRole.User, userPrompt),
         ];
 
         var options = new ChatOptions { ResponseFormat = ChatResponseFormat.Json, Temperature = 0 };
@@ -50,7 +161,15 @@ public sealed class AiTranslator(IChatClient chatClient, string? systemPrompt = 
         return Parse(response.Text, request);
     }
 
-private readonly string effectiveSystemPrompt = ComposeSystemPrompt(systemPrompt, applicationContext);
+    /// <summary>
+    /// One case per call. Batching was cheaper but measurably worse: asked
+    /// for four variants at once the model would copy the same wording into
+    /// two of them ("dal" where "dalla" was due). Alone, with its example
+    /// word in hand, it has exactly one sentence to get right.
+    /// </summary>
+    private const int CasesPerCall = 1;
+
+    private readonly string effectiveSystemPrompt = ComposeSystemPrompt(systemPrompt, applicationContext);
 
     /// <summary>
     /// Builds the system message: the override replaces the default prompt
@@ -156,8 +275,163 @@ private readonly string effectiveSystemPrompt = ComposeSystemPrompt(systemPrompt
             "A single-word value that is a noun must declare its gender trait; "
             + "when a sentence hole hosts a gendered value, emit one row per gender (criteria like 0:GENDER-female).");
 
+        AppendValueHoleChecklist(prompt, request);
+
         return prompt.ToString();
     }
+
+    /// <summary>
+    /// The sentence with each hole carrying the word that will land in it:
+    /// "You have {0:'3'} coins in your {1:'borsa'}". The model writes the
+    /// translation AROUND those braces and leaves them untouched, so it never
+    /// has to put placeholders back — and we can verify, hole by hole, that
+    /// it did (idea of the user, and it removed a whole class of defects).
+    /// </summary>
+    private static string Annotate(string key, IReadOnlyDictionary<int, string> examples) =>
+        HolePattern.Replace(key, match =>
+        {
+            var index = int.Parse(match.Groups[1].Value);
+            return examples.TryGetValue(index, out var example) && example.Length > 0
+                ? $"{{{index}:'{example}'}}"
+                : match.Value;
+        });
+
+    /// <summary>Turns "{0:'monete'}" back into "{0}"; tolerant about how the model spaced or quoted it.</summary>
+    internal static string Deannotate(string template) =>
+        AnnotatedHolePattern.Replace(template, "{$1}");
+
+    private static readonly Regex HolePattern = new(@"\{(\d+)\}", RegexOptions.Compiled);
+
+    private static readonly Regex AnnotatedHolePattern = new(@"\{\s*(\d+)\s*:\s*[^}]*\}", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The prompt for a handful of specific grammatical cases: the criteria
+    /// are dictated, so the model only has to write the sentence for each
+    /// one — no counting, no inventing, and each case spelled out in words.
+    /// </summary>
+    private static string BuildCasesPrompt(TranslationRequest request, IReadOnlyList<VariantCase> cases, string? lead = null)
+    {
+        // The variant checklist stays even though the cases are explicit:
+        // removing it was tried and measurably worse — the model dropped the
+        // articles again. Redundant instructions, but they earn their place.
+        var prompt = new StringBuilder(BuildUserPrompt(request));
+
+        prompt.AppendLine();
+        prompt.Append("Translate the sentence ").Append(cases.Count)
+            .AppendLine(" times, once for each case below. Answer with EXACTLY one row per case,");
+        prompt.AppendLine("copying its criteria string verbatim into \"criteria\", and leaving \"traits\" empty:");
+
+        foreach (var variant in cases)
+        {
+            prompt.Append("- criteria \"").Append(variant.Criteria).Append("\": ")
+                .Append(Describe(variant.Criteria)).AppendLine(". Sentence for this case:");
+
+            // Each hole already carries the word that will land in it. The
+            // model writes the translation AROUND these braces and copies
+            // them over untouched — no placeholder to put back, and we can
+            // check afterwards that every one of them came home.
+            prompt.Append("    ").AppendLine(Annotate(request.Key, variant.Examples));
+        }
+
+        prompt.AppendLine();
+        prompt.AppendLine(
+            "Inside each brace you find the hole index and, after the colon, the EXACT term that will appear "
+            + "there in the target language. Write the sentence so that it is grammatically perfect with those "
+            + "terms in place — articles, prepositions, contractions, agreements, suffixes, mutations, word "
+            + "order, whatever this language requires.");
+        prompt.AppendLine(
+            "COPY THE BRACES OVER UNCHANGED, exactly as given, including the term inside them. Never translate, "
+            + "inflect, move or drop what is inside a brace, and never write the term outside its brace. "
+            + "Everything a value needs in order to fit — the article in front of it, the preposition, the "
+            + "case ending — belongs OUTSIDE the brace and is your job.");
+        prompt.AppendLine(
+            "Example (Italian): \"You have {0:'3'} coins in your {1:'borsa'}\" becomes "
+            + "\"Hai {0:'3'} monete nella tua {1:'borsa'}\".");
+
+        if (lead is not null)
+        {
+            prompt.AppendLine();
+            prompt.Append("Another case of this same sentence was already translated as: ").AppendLine(lead);
+            prompt.AppendLine(
+                "Keep EXACTLY the same words and style — same verb, same turn of phrase. Only the grammar "
+                + "around the holes may differ, as this case requires.");
+        }
+
+        return prompt.ToString();
+    }
+
+    /// <summary>Turns "0:GENDER-female,1:GENDER-male" into a sentence the model can act on.</summary>
+    private static string Describe(string criteria)
+    {
+        var parts = criteria.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(tag => tag.Split(':', 2))
+            .Where(tag => tag.Length == 2)
+            .GroupBy(tag => tag[0], StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var traits = group.Select(tag => tag[1]).ToList();
+                var described = traits.Select(trait => trait switch
+                {
+                    WellKnownTraits.GenderMale => "masculine",
+                    WellKnownTraits.GenderFemale => "feminine",
+                    WellKnownTraits.StartsWithVowel => "starting with a vowel sound",
+                    _ when trait.StartsWith("CLDR-", StringComparison.Ordinal) =>
+                        $"a number of plural category {trait}",
+                    // Unknown traits are passed through verbatim: a language may
+                    // declare properties we never anticipated, and the model
+                    // knows what they mean better than we do.
+                    _ => $"marked \"{trait}\"",
+                });
+
+                return $"the value in {{{group.Key}}} is {string.Join(", ", described)}";
+            });
+
+        return string.Join("; ", parts);
+    }
+
+    /// <summary>
+    /// The holes that receive translated VALUES, listed explicitly. Without
+    /// this, models emit the right criteria with identical text — the variants
+    /// exist but nothing is declined. Same lesson as the plural categories:
+    /// what you want systematically, you enumerate.
+    /// </summary>
+    private static void AppendValueHoleChecklist(StringBuilder prompt, TranslationRequest request)
+    {
+        var holes = request.Facts
+            .Select(fact => fact.Split(':', 2))
+            .Where(parts => parts.Length == 2 && int.TryParse(parts[0], out _) && IsSemanticContext(parts[1]))
+            .GroupBy(parts => parts[0], StringComparer.Ordinal)
+            .OrderBy(group => int.Parse(group.Key))
+            .Select(group => $"{{{group.Key}}} ({string.Join('/', group.Select(parts => parts[1]).Distinct())})")
+            .ToList();
+
+        if (holes.Count == 0)
+        {
+            return;
+        }
+
+        prompt.Append("Value holes: ").AppendLine(string.Join(", ", holes));
+        prompt.AppendLine(
+            "These holes are filled at runtime with translated values that arrive BARE and lowercase, "
+            + "and whose grammatical gender is unknown in advance. Therefore:");
+        prompt.AppendLine(
+            "- emit one row per COMBINATION of genders of these holes "
+            + "(criteria like \"0:GENDER-female,1:GENDER-male\");");
+        prompt.AppendLine(
+            "- the rows MUST DIFFER IN THEIR TEXT: what changes is the article, preposition or agreement "
+            + "around the hole. Rows that carry different criteria but identical text are useless — "
+            + "if the target language needs no change, emit a single generic row instead;");
+        prompt.AppendLine(
+            "- when the target language elides or contracts before a vowel, add the same rows again with the "
+            + $"extra criterion \"<hole>:{WellKnownTraits.StartsWithVowel}\" and the elided wording.");
+    }
+
+    /// <summary>A hole's semantic domain ("item", "tool"), as opposed to the reserved grammatical vocabulary.</summary>
+    private static bool IsSemanticContext(string context) =>
+        !context.StartsWith("CLDR-", StringComparison.Ordinal)
+        && !context.StartsWith("GENDER-", StringComparison.Ordinal)
+        && context != WellKnownTraits.StartsWithVowel
+        && context != WellKnownTraits.Capitalize;
 
     private static IReadOnlyList<TranslationRow> Parse(string responseText, TranslationRequest request)
     {
@@ -168,8 +442,8 @@ private readonly string effectiveSystemPrompt = ComposeSystemPrompt(systemPrompt
         {
             using var document = JsonDocument.Parse(json);
             var rowsElement = document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("rows", out var rows)
-                    ? rows
+                && document.RootElement.TryGetProperty("rows", out var wrapped)
+                    ? wrapped
                     : document.RootElement;
 
             dtos = JsonSerializer.Deserialize<List<RowDto>>(rowsElement.GetRawText(), JsonOptions);
@@ -184,19 +458,67 @@ private readonly string effectiveSystemPrompt = ComposeSystemPrompt(systemPrompt
             return [];
         }
 
-        return dtos
+        var rows = dtos
             .Where(dto => !string.IsNullOrWhiteSpace(dto.Template))
             .Select(dto => new TranslationRow(
                 request.Key,
                 NullIfEmpty(dto.Criteria),
                 request.TargetLanguage,
                 dto.Template!,
-                NullIfEmpty(dto.Traits)))
-            .ToArray();
+                WithDerivedTraits(NullIfEmpty(dto.Traits), dto.Template!, request)))
+            .ToList();
+
+        return WithGenericRow(rows, request);
     }
 
     private static string? NullIfEmpty(string? tags) =>
         string.IsNullOrWhiteSpace(tags) ? null : tags;
+
+    /// <summary>
+    /// A VALUE must always have an unconditional row: models sometimes answer
+    /// only with plural variants ("CLDR-one", "CLDR-other"), and then a plain
+    /// lookup — an item name in a sentence hole — matches nothing and falls
+    /// back to English. The singular form is the natural generic one.
+    /// </summary>
+    private static IReadOnlyList<TranslationRow> WithGenericRow(List<TranslationRow> produced, TranslationRequest request)
+    {
+        if (request.Key.Contains('{') || produced.Count == 0 || produced.Any(row => row.Context is null))
+        {
+            return produced;
+        }
+
+        var singular = produced.FirstOrDefault(row =>
+            row.Context!.Contains(PluralRules.One, StringComparison.Ordinal)) ?? produced[0];
+
+        produced.Insert(0, singular with { Context = null });
+        return produced;
+    }
+
+    /// <summary>
+    /// Adds the traits we can decide ourselves. starts-with-vowel is one of
+    /// them: it is a property of the translated text, models forget it, and
+    /// without it every elided sentence row stays unreachable. Only for
+    /// VALUES — a sentence template's first letter says nothing about the
+    /// values that will fill its holes.
+    /// </summary>
+    private static string? WithDerivedTraits(string? traits, string template, TranslationRequest request)
+    {
+        if (request.Key.Contains('{') || !GrammarRules.StartsWithVowelSound(template, request.TargetLanguage))
+        {
+            return traits;
+        }
+
+        var tags = (traits ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        if (!tags.Contains(WellKnownTraits.StartsWithVowel, StringComparer.Ordinal))
+        {
+            tags.Add(WellKnownTraits.StartsWithVowel);
+        }
+
+        return string.Join(',', tags);
+    }
 
     /// <summary>Models sometimes wrap JSON in markdown fences despite instructions.</summary>
     private static string StripFences(string text)

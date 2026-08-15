@@ -78,12 +78,28 @@ if (verify)
     return 3;
 }
 
+// The values already in the store teach us how this language behaves: which
+// trait combinations exist, and a real word for each. Translate the values
+// first (game content included), then the sentences ask for exactly the cases
+// those words can produce.
+var vocabulary = ValueVocabulary.FromStore(store);
+foreach (var language in languages)
+{
+    var states = vocabulary.StatesOf(language);
+    if (states.Count > 0)
+    {
+        Console.WriteLine($"Vocabulary [{language}]: {states.Count} trait combinations "
+            + $"({string.Join("; ", states.Select(state => $"{string.Join('+', state.Traits)} e.g. {state.Example}"))})");
+    }
+}
+
 var translator = AiTranslator.ForOpenAiCompatibleEndpoint(
     new Uri(Required("Endpoint")),
     Required("ApiKey"),
     Required("Model"),
     configuration["Translator:SystemPrompt"],
-    configuration["Translator:ApplicationContext"]);
+    configuration["Translator:ApplicationContext"],
+    vocabulary);
 
 var filler = new CatalogFiller(translator, store);
 var report = await filler.FillAsync(entries, languages, log: Console.WriteLine);
