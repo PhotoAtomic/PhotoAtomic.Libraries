@@ -102,6 +102,32 @@ outside any sentence — a label, a list entry, an item name in the UI — looki
 it up by content with its traits, honouring `Capitalize`, and queueing a
 background fill on a miss. Untranslated values render as they are.
 
+### `ValueHygiene` — what a usable value looks like
+
+A sentence row is chosen by the traits of the values filling its holes, so a
+trait that never arrives does not degrade gracefully: it makes the whole
+sentence fall back to the source language. One object whose translation forgot
+to declare its gender is enough to make it speak English among forty perfect
+neighbours. `ValueHygiene` holds the checks — cheaper than debugging that:
+
+- `UsesGrammaticalGender(corpus, language)` reads from the corpus whether a
+  language declines gender, instead of assuming it: if any value already
+  translated into it declares a `GENDER-` trait, one that declares none is a
+  hole. No list of languages to maintain, and a language nobody predicted is
+  covered the moment its first gendered value arrives. `DeclaresGender(row)`
+  (also over a set of rows) is the per-value test — the natural cue to ask the
+  translator again;
+- `AsCommonNoun(row)` lowercases an initial the model gave unbidden ("Falò" →
+  "falò"): a capital inside a value survives everywhere it appears, and
+  "there is the Bucket in the chest" reads like a typo. `GrammarRules` puts
+  the capital back at the start of a sentence. Values declaring `Capitalize`
+  (German nouns, names) are left alone;
+- `AsProperNoun(row)` marks a value that keeps its capital wherever it lands,
+  with the trait rather than by hoping nobody lowercases it. Idempotent.
+
+Deciding *which* values are proper names stays with the application: only it
+knows that "The Pirate Galley" is a place and "iron lever" is a thing.
+
 ### `PluralRules` — CLDR categories, no AI
 
 `CategoryOf(value, language)` maps a number to its CLDR category
