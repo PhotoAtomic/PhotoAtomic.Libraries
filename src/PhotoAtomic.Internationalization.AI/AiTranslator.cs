@@ -284,9 +284,10 @@ public sealed class AiTranslator(
         - Translate single-word values in lowercase. Exception: proper names, and
           nouns in languages that always capitalize them (like German) — for those
           add the trait "Capitalize", and the engine will uppercase the word's
-          first letter wherever it appears. The engine also capitalizes sentence
-          openings mechanically, so lowercase values are safe at the start of a
-          sentence.
+          first letter wherever it appears. A lowercase value is safe at the start
+          of a sentence: the engine capitalizes a VALUE that opens one.
+        - It does NOT touch your sentence templates: write each one with the
+          capitalization it should have, exactly as it will appear on screen.
         - When the key is a single word or short phrase, its facts state its
           SEMANTIC DOMAIN (e.g. "tool" means the word names a physical tool):
           translate that sense of the word, never a homonym from another domain.

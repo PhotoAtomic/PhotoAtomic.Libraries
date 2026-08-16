@@ -5,8 +5,15 @@ if (args.Length == 0 || args[0].StartsWith('-'))
 {
     Console.WriteLine("PhotoAtomic i18n pre-translation tool");
     Console.WriteLine();
-    Console.WriteLine("Usage: <assembly-path | project.csproj> [--csv <path>] [--all]");
+    Console.WriteLine("Usage: <source> [<source>...] [--csv <path>] [--all]");
     Console.WriteLine("       [--verify] [--lint] [--fix] [--prune]");
+    Console.WriteLine();
+    Console.WriteLine("A source is a project.csproj (source generators run, Razor included), a");
+    Console.WriteLine("compiled assembly.dll, or a .json catalog file / directory of them — the");
+    Console.WriteLine("content a compiler never sees, emitted by whoever owns it.");
+    Console.WriteLine();
+    Console.WriteLine("PASS THEM ALL AT ONCE. Code and content belong in one catalog: --prune");
+    Console.WriteLine("deletes rows nothing asks for, so a partial catalog deletes the rest.");
     Console.WriteLine();
     Console.WriteLine("  --all     THE ONE COMMAND. Prunes what the code no longer says, translates");
     Console.WriteLine("            the values, then the sentences (in that order: sentences are");
@@ -37,7 +44,17 @@ if (args.Length == 0 || args[0].StartsWith('-'))
     return 1;
 }
 
-var assemblyPath = args[0];
+// Every source named before the options, together. Code and content end up in
+// ONE catalog because half a catalog is dangerous: --prune deletes rows for
+// keys nobody asks for, so a run that only knows about the code would happily
+// delete every line the rooms say, and a run that only knows the rooms would
+// delete the program's own words.
+var sources = args.TakeWhile(argument => !argument.StartsWith('-')).ToList();
+if (sources.Count == 0)
+{
+    Console.WriteLine("No source given: name a project, an assembly or a catalog file.");
+    return 1;
+}
 var verify = args.Contains("--verify");
 var lint = args.Contains("--lint");
 var fix = args.Contains("--fix");
@@ -67,15 +84,28 @@ var languages = configuration.GetSection("Translator:Languages").Get<string[]>()
     ?? throw new InvalidOperationException("Missing configuration value Translator:Languages");
 var csvPath = csvOverride ?? configuration["Translator:Csv"] ?? "translations.csv";
 
-// A csproj goes through the workspace (source generators run there, Razor
-// included, so markup T() calls are visible); a dll reads the baked catalog.
-var entries = assemblyPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-    ? ProjectCatalogReader.Read(assemblyPath, Console.WriteLine)
-    : CatalogReader.Read(assemblyPath);
+// Three kinds of source, one catalog. A csproj goes through the workspace
+// (source generators run there, Razor included, so markup T() calls are
+// visible); a dll reads the baked catalog; a .json file or a directory of them
+// is content somebody else owns — rooms, records, anything a compiler never
+// sees.
+var entries = sources
+    .SelectMany(source => FileCatalogReader.Handles(source)
+        ? FileCatalogReader.Read(source, Console.WriteLine)
+        : source.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+            ? ProjectCatalogReader.Read(source, Console.WriteLine)
+            : CatalogReader.Read(source))
+    // The tool's own identity for a unit of translation, applied across
+    // sources: the same sentence said by the code and by a room is one row.
+    .GroupBy(entry => (entry.Key, entry.Context, entry.Kind))
+    .Select(group => group.First())
+    .ToList();
+
 var sentences = entries.Count(entry => entry.Kind == CatalogEntryKind.Sentence);
 var values = entries.Count - sentences;
 
-Console.WriteLine($"Catalog: {sentences} sentences, {values} values from {Path.GetFileName(assemblyPath)}");
+Console.WriteLine($"Catalog: {sentences} sentences, {values} values from "
+    + string.Join(" + ", sources.Select(Path.GetFileName)));
 Console.WriteLine($"Languages: {string.Join(", ", languages)}");
 Console.WriteLine($"CSV: {Path.GetFullPath(csvPath)}");
 Console.WriteLine();

@@ -178,4 +178,48 @@ public class TranslationRepairTests : IDisposable
         Assert.False(File.ReadAllText(path).StartsWith('﻿'));
         Assert.Equal("Bonfire", Assert.Single(store.LoadAll()).Key);
     }
+
+    [Fact]
+    public async Task What_the_catalog_knows_about_a_value_reaches_rows_written_before_it_knew()
+    {
+        // The table outlives the rules that judge it: these two were written
+        // when nobody marked rooms as places, and a fill that skips what is
+        // already there would never come back to them.
+        var store = StoreWith(
+            new TranslationRow("The Ship's Galley", null, "it-IT", "la cambusa della nave", "GENDER-female"),
+            new TranslationRow("Secret recipe", null, "it-IT", "Ricetta segreta", "GENDER-female"));
+
+        CatalogEntry[] catalog =
+        [
+            new("The Ship's Galley", null, [], [WellKnownTraits.Capitalize], CatalogEntryKind.Value),
+            new("Secret recipe", "item", [], ["item"], CatalogEntryKind.Value),
+        ];
+
+        var translator = new ScriptedTranslator((_, _) => throw new InvalidOperationException("must not ask"));
+        var report = await new TranslationRepair(translator, store).RepairAsync([], catalog, SentenceKeys);
+
+        Assert.Equal(2, report.Locally);
+        Assert.Empty(translator.Requests);
+
+        var rows = store.LoadAll().GroupBy(row => row.Key).ToDictionary(g => g.Key, g => g.Last());
+
+        // A place keeps its capital and says so...
+        Assert.Contains(WellKnownTraits.Capitalize, rows["The Ship's Galley"].Traits!);
+
+        // ...a thing goes lowercase, or it would keep that capital in the
+        // middle of every sentence naming it.
+        Assert.Equal("ricetta segreta", rows["Secret recipe"].Template);
+    }
+
+    [Fact]
+    public async Task A_value_the_catalog_says_nothing_about_is_left_alone()
+    {
+        var store = StoreWith(new TranslationRow("Elsewhere", null, "it-IT", "Altrove", null));
+
+        var translator = new ScriptedTranslator((_, _) => throw new InvalidOperationException("must not ask"));
+        var report = await new TranslationRepair(translator, store).RepairAsync([], Catalog, SentenceKeys);
+
+        Assert.Equal(0, report.Locally);
+        Assert.Equal("Altrove", Assert.Single(store.LoadAll()).Template);
+    }
 }

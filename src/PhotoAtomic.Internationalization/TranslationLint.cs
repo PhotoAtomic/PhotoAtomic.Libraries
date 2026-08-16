@@ -63,6 +63,12 @@ public static class TranslationLint
 
         /// <summary>One language calls the value a proper name and another does not: one of them is wrong.</summary>
         public const string DisputedCapitalization = "disputed-capitalization";
+
+        /// <summary>The translation opens in lowercase where the source opens a sentence.</summary>
+        public const string LowercaseOpening = "lowercase-opening";
+
+        /// <summary>A value written with a capital that it never declared: it will keep it mid-sentence.</summary>
+        public const string UndeclaredCapital = "undeclared-capital";
     }
 
     /// <param name="sentenceKeys">
@@ -99,6 +105,7 @@ public static class TranslationLint
             if (sentences is null || sentences.Contains(row.Key))
             {
                 findings.AddRange(BorrowedWords(row, corpus, sentences));
+                findings.AddRange(Opening(row));
                 continue;
             }
 
@@ -116,6 +123,7 @@ public static class TranslationLint
             {
                 values.Add(row);
                 findings.AddRange(Genders(row, corpus));
+                findings.AddRange(Capital(row));
             }
         }
 
@@ -190,6 +198,59 @@ public static class TranslationLint
         }
     }
 
+    /// <summary>
+    /// A sentence that opens in lowercase where the source opens in uppercase.
+    ///
+    /// This rule is the other half of a decision: the renderer no longer fixes
+    /// the first letter of a template, because a template is somebody's writing
+    /// and correcting it silently both presumes and CONCEALS — a machine
+    /// translation that forgot its capital used to be patched on the way to the
+    /// screen and nobody ever knew. Now it is said out loud, here.
+    ///
+    /// Only when the source itself opens with a letter in uppercase: a key that
+    /// begins with a hole, a digit or a fragment is making no claim about how
+    /// its translations should open.
+    /// </summary>
+    private static IEnumerable<LintFinding> Opening(TranslationRow row)
+    {
+        if (First(row.Key) is not { } source || !char.IsUpper(source)
+            || First(row.Template) is not { } translated || !char.IsLower(translated))
+        {
+            yield break;
+        }
+
+        yield return new LintFinding(
+            Rules.LowercaseOpening, row.Key, row.Context, row.Language,
+            $"opens in lowercase where the source opens a sentence: \"{row.Template}\"",
+            LintSeverity.Warning);
+    }
+
+    /// <summary>The first letter that decides how a text opens; punctuation and quotes are transparent.</summary>
+    private static char? First(string text)
+    {
+        foreach (var character in text)
+        {
+            if (char.IsLetter(character))
+            {
+                return character;
+            }
+
+            // A hole, a digit or anything substantial means the opening is not
+            // a letter at all, and nothing can be concluded from it.
+            if (!char.IsWhiteSpace(character) && !char.IsPunctuation(character) && !char.IsSymbol(character))
+            {
+                return null;
+            }
+
+            if (character == '{')
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>A value has to say its gender wherever gender decides the sentence around it.</summary>
     private static IEnumerable<LintFinding> Genders(TranslationRow row, IReadOnlyList<TranslationRow> corpus)
     {
@@ -205,6 +266,38 @@ public static class TranslationLint
                 $"\"{row.Template}\" declares no gender: every sentence naming it will find no matching row "
                 + "and fall back to the source language");
         }
+    }
+
+    /// <summary>
+    /// A value that carries a capital without declaring one.
+    ///
+    /// Values are stored lowercase on purpose: the engine puts the capital
+    /// back when one opens a sentence, and leaves it alone everywhere else, so
+    /// "la chiave" reads right in the middle of a line. A value that arrives
+    /// already capitalized keeps that capital WHEREVER it lands — "Giocatore
+    /// Uno intasca la Ricetta segreta" — and the engine has no way to know
+    /// whether that was meant.
+    ///
+    /// Either answer is fine, and both are a fix: if it is a proper name it
+    /// must say so with the Capitalize trait; if it is a common noun it should
+    /// be lowercase. What is not fine is leaving the reader to guess, which is
+    /// why this is reported rather than silently corrected — the model that
+    /// wrote it can be asked again, and it knows which of the two it meant.
+    /// </summary>
+    private static IEnumerable<LintFinding> Capital(TranslationRow row)
+    {
+        if (row.Template.Length == 0
+            || !char.IsUpper(row.Template[0])
+            || ValueHygiene.DeclaresCapitalization(row))
+        {
+            yield break;
+        }
+
+        yield return new LintFinding(
+            Rules.UndeclaredCapital, row.Key, row.Context, row.Language,
+            $"\"{row.Template}\" starts with a capital but declares no {WellKnownTraits.Capitalize} trait: "
+            + "it will keep that capital in the middle of every sentence naming it",
+            LintSeverity.Warning);
     }
 
     /// <summary>

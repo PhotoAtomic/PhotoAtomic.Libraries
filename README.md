@@ -13,7 +13,7 @@ packages with lockstep versioning (one git tag `v*` → one version for every pa
 | `PhotoAtomic.Internationalization` | library (net8.0/net10.0) | Structural-key i18n with zero dependencies: `T($"...")`, grammar engine (CLDR plurals, gender, elision), CSV store. |
 | `PhotoAtomic.Internationalization.SourceGen` | Roslyn analyzer | Opt-in compile-time catalog generator + `PAI18N001` analyzer for the core i18n library. |
 | `PhotoAtomic.Internationalization.AI` | library (net10.0) | Background AI translation filler based on Microsoft.Extensions.AI. |
-| `PhotoAtomic.Internationalization.Tool` | dotnet tool (`pai18n`) | Extracts, pre-translates and verifies translation catalogs from a csproj. |
+| `PhotoAtomic.Internationalization.Tool` | dotnet tool (`pai18n`) | Extracts, pre-translates, lints and repairs translation catalogs — from a csproj, an assembly or JSON content files. |
 | `PhotoAtomic.DecimalPrecisionExtensions` | library (netstandard2.0/net8.0) | `decimal` extensions for significant zeros: `SetPrecision`, `RoundWithPrecision`, `GetPrecision` on the binary representation. |
 
 More libraries are being folded in over time; the sources under `staging/` are imported

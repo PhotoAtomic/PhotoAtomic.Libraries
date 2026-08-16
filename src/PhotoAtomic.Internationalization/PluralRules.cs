@@ -37,6 +37,12 @@ public static class PluralRules
     {
         double? number = value switch
         {
+            // A number asked to be written in words is still a number: the
+            // sentence around it agrees with the amount, not with the wrapper.
+            // Unwrapped here so a hole holding Spelled(2) gives a sentence the
+            // same fact a bare 2 would — which is the whole point of the type
+            // existing, in Gaelic above all.
+            Spelled spelled => (double)spelled.Amount,
             sbyte x => x,
             byte x => x,
             short x => x,

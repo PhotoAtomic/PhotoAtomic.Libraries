@@ -262,25 +262,43 @@ public static class Internationalization
 
         var template = sentenceRow?.Template ?? text.Key;
 
+        // The capital goes on the VALUE that opens the sentence, never on the
+        // template: values are stored lowercase and need one, a template was
+        // written by someone who already decided how it opens. Which holes are
+        // in that position depends on the template chosen — a language may put
+        // the subject last — so it is asked of the row that will actually be
+        // rendered, this one or the fallback.
+        string Render(string source)
+        {
+            var values = (object?[])holes.Clone();
+            foreach (var index in GrammarRules.HolesOpeningASentence(source))
+            {
+                if (index < values.Length && values[index] is string opening)
+                {
+                    values[index] = GrammarRules.CapitalizeInitial(opening, language);
+                }
+            }
+
+            return string.Format(culture, source, values);
+        }
+
         string sentence;
         try
         {
-            sentence = string.Format(culture, template, holes);
+            sentence = Render(template);
         }
         catch (FormatException)
         {
             // A malformed row — typically a machine translation that invented
             // a hole the sentence does not have — must never take the screen
             // down: the source template always renders.
-            sentence = string.Format(culture, text.Key, holes);
+            sentence = Render(text.Key);
         }
 
-        // Grammar mechanics, not translation: elision contracts the little
-        // words in front of the vowels the values happened to bring, and
-        // positional capitalization uppercases sentence openings so values
-        // can stay lowercase. Elision first — it may change the first word.
-        return GrammarRules.ApplySentenceCapitalization(
-            GrammarRules.ApplyElision(sentence, language), language);
+        // Elision is the one mechanic left to apply to the whole sentence: it
+        // contracts the little words in front of the vowels the values happened
+        // to bring, which is knowable only once they are in place.
+        return GrammarRules.ApplyElision(sentence, language);
     }
 
     /// <summary>

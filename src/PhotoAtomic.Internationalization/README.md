@@ -24,7 +24,7 @@ The family is five projects:
 | `PhotoAtomic.Internationalization` | The core engine. Zero dependencies. |
 | `PhotoAtomic.Internationalization.AI` | `ITranslator` implementation on Microsoft.Extensions.AI (any OpenAI-compatible endpoint). |
 | `PhotoAtomic.Internationalization.SourceGen` | Roslyn source generator + analyzer: extracts every `T(...)` into a compile-time catalog. |
-| `PhotoAtomic.Internationalization.Tool` | CLI: pre-translates the catalog for a set of languages (`fill`) and gates CI (`--verify`). |
+| `PhotoAtomic.Internationalization.Tool` | CLI: pre-translates, lints and repairs the catalog for a set of languages (`--all`), and gates CI (`--verify`, `--lint`). Reads code and JSON catalogs alike. |
 | `PhotoAtomic.IndentedStrings` | Vendored helper (author: PhotoAtomic, from the Darc repo) for readable code generation. |
 
 ---
@@ -153,6 +153,16 @@ on `TranslationLint.Rules`:
   ("infila la {1} nel falò");
 - `disputed-capitalization` — one language calls the value a proper name and
   another does not;
+- `lowercase-opening` — the translation opens in lowercase where the source
+  opens a sentence (the other half of no longer patching templates silently);
+  only when the source itself opens with an uppercase letter, since a key
+  starting with a hole or a digit makes no claim about how it should open;
+- `undeclared-capital` — a value written with a capital it never declared with
+  the `Capitalize` trait: it will keep that capital mid-sentence
+  ("Giocatore Uno intasca la Ricetta segreta"). Either answer fixes it — say
+  `Capitalize` if it is a name, lowercase it if it is a common noun — and
+  reporting beats correcting, because the model that wrote it knows which of
+  the two it meant;
 - `orphan-row` — a sentence nobody says any more, the code that asked for it
   is gone. Only reported when the caller passes the sentence keys it knows.
 
@@ -170,14 +180,75 @@ for Arabic (all six, modulo 100), Welsh (six is `many`!), Scottish Gaelic
 `one`), and the one/other default. `CategoriesOf(language)` lists what a
 language distinguishes — used as an explicit checklist in AI prompts.
 
+### `Spelled` — numbers in words
+
+`T($"You found {new Spelled(count)} coins")` renders "two coins", "due
+monete", "dà dhà bhonn". The number becomes a translated VALUE like any other:
+the row for `"2"` in Italian says `due`, so nobody hard-codes number words —
+least of all in a language nobody on the team speaks. Untranslated it renders
+as its digits, which is never wrong, only less charming. `int`, `long`,
+`decimal` and `double` convert implicitly.
+
+The point of the type is what it does **not** lose: `PluralRules.CategoryOf`
+unwraps it, so the sentence around it still agrees with the amount. Wrapping a
+number normally hides it, and `"{0} coins"` would stop knowing it holds a two —
+which matters most where you least expect it, since Scottish Gaelic has a
+category for TWO and puts the following noun in the lenited singular. Its key
+is formatted with the invariant culture on purpose: a key that moved with the
+reader's language would make `1000` and `1,000` two different words to learn.
+
+### `Phrase` — a sentence written as data
+
+`new Phrase("The {liquid} boils away in the {vessel}").Render(values)` is the
+same sentence a `T($"...")` call site produces, except nobody compiled it. It
+exists because content is increasingly **written by a model**, and a model
+cannot compile a call site: a generated room brings its own rules and its own
+verbs, and without this it could not bring its own words — everything it
+invented would fall back on a generic sentence written in advance by a
+programmer who could not know about it.
+
+The holes are **named**, not numbered, because the data around them already
+names things (a rule binds `liquid` and `vessel`, an action binds `actor` and
+`target`). Those names become the legend handed to the translator, so an AI is
+told "{0} is the liquid" — better than what a C# call site usually manages. A
+hole may declare a context after a colon (`{cook:person}`); doubled braces are
+literal braces, exactly as in C#. `Key` exposes the structural key
+(`"The {0} boils away in the {1}"`), identical to what the compiler derives.
+
+Rendering does not reimplement anything: it replays the phrase into the real
+interpolated-string handler and calls `T()`, so a data sentence and a compiled
+one take the same path — same key, same facts, same matching, same table, same
+lint. A hole nobody bound renders as its own name rather than throwing.
+
+### `FileCatalogReader` — the content a compiler never sees
+
+A catalog read from a **file**: `CatalogEntry` written down as JSON, for text
+that is data — rooms written by an AI, rows in a database, a CMS export. The
+other two readers derive a catalog by looking at a program; this one is handed
+one by whoever owns the content, and from that point downstream nothing can
+tell the difference: vocabulary order, lint, repair and pruning all work as
+they do for code. `Handles(path)` takes a `.json` file or a directory of them
+(read shallow, in name order, so two runs see the same catalog in the same
+sequence); a file that turns out not to be a catalog is reported and skipped
+rather than failing the run. `ToJson(entries)` writes the shape it expects.
+
 ### `GrammarRules` and `WellKnownTraits` — capitalization and elision
 
 Values are stored lowercase. The trait `Capitalize` keeps an uppercase initial
-everywhere (proper names, German nouns). Everything positional is mechanics:
-`GrammarRules.ApplySentenceCapitalization` uppercases sentence openings and
-letters after `.` `!` `?`, transparently through quotes, leaving digit-led
-sentences alone ("2 chiavi rotte"). `WellKnownTraits` holds the conventional
-vocabulary: `GENDER-male`, `GENDER-female`, `starts-with-vowel`, `Capitalize`.
+everywhere (proper names, German nouns). `WellKnownTraits` holds the
+conventional vocabulary: `GENDER-male`, `GENDER-female`, `starts-with-vowel`,
+`Capitalize`.
+
+**The capital goes on the value that opens the sentence, never on the
+template.** A value is stored lowercase and needs one; a template was written
+by someone who already decided how it opens, and patching its first letter on
+the way to the screen both presumes and conceals — a machine translation that
+forgot its capital used to be silently corrected and nobody ever knew. Now the
+renderer asks `GrammarRules.HolesOpeningASentence(template)` which holes are in
+opening position (of the row actually chosen: a language may put the subject
+last) and applies `CapitalizeInitial(value, language)` to those, stepping over
+leading punctuation so a quoted value still counts. A template that forgot its
+own capital is reported by the lint instead, as `lowercase-opening`.
 
 Elision is mechanics too, and applied after rendering:
 `GrammarRules.ApplyElision` contracts the little words that must give way
@@ -241,6 +312,10 @@ exact tag vocabulary, and includes hard-won rules:
   language and the gender traits — the model ticks a list instead of recalling
   CLDR from memory (this fixed plural-variant completeness);
 - values are inserted bare and lowercase; articles live in sentence templates.
+  A lowercase value is safe at the start of a sentence — the engine capitalizes
+  the value that opens one — but the model is told plainly that its **templates
+  are never touched**: each is written with the capitalization it will have on
+  screen.
 
 `systemPrompt` replaces the default entirely (expert use);
 `applicationContext` is additive — "a point-and-click adventure game" steers
@@ -317,8 +392,16 @@ generator-derived key to the runtime `KeyOf` — they cannot diverge silently.
 ## The Tool: pre-translate at build time, verify in CI
 
 ```
-tool <assembly.dll | project.csproj> [--csv <path>] --all
+tool <source> [<source>...] [--csv <path>] --all
 ```
+
+A **source** is a `project.csproj` (source generators run, Razor included), a
+compiled `assembly.dll`, or a `.json` catalog file / directory of them — the
+content a compiler never sees, emitted by whoever owns it. **Pass them all at
+once:** code and content belong in one catalog, because `--prune` deletes rows
+nothing asks for, so a run that only knows the code would happily delete every
+line the rooms say, and vice versa. Sources are merged on `(key, context,
+kind)`: the same sentence said by the code and by a room is one row.
 
 **`--all` is the whole workflow in one command.** Write your UI with `T(...)`,
 list your target languages in the config, run it once:
@@ -346,7 +429,7 @@ nothing to do makes no AI calls and leaves the file byte-identical.
 The single steps stay available for CI and for looking closer:
 
 ```
-tool <assembly.dll | project.csproj> [--csv <path>] [--verify] [--lint] [--fix] [--prune]
+tool <source> [<source>...] [--csv <path>] [--verify] [--lint] [--fix] [--prune]
 ```
 
 - **dll mode** reads the baked `TranslationCatalog`.
@@ -354,6 +437,9 @@ tool <assembly.dll | project.csproj> [--csv <path>] [--verify] [--lint] [--fix] 
   generators run inside the compilation — **Razor included**: `T(...)` calls
   written in `.razor` markup are extracted with full semantics (the shared
   `SiteExtraction` brain guarantees parity with the generator).
+- **catalog mode** reads `CatalogEntry` records out of `.json` files
+  (`FileCatalogReader`), for text the compiler never sees. A file in the
+  directory that is not a catalog is reported and skipped, not fatal.
 - **fill** (default): translates delta-style — (key, language) pairs already
   in the CSV are skipped; reruns only pay for what is new. Limited parallelism,
   failures counted, exit 2 on any. It first builds the `ValueVocabulary` from

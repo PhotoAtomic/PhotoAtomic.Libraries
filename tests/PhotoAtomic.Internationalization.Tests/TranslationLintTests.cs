@@ -156,6 +156,39 @@ public class TranslationLintTests
     }
 
     [Fact]
+    public void A_translation_that_forgot_its_opening_capital_is_reported_now_that_nobody_patches_it()
+    {
+        var findings = Inspect(
+            new TranslationRow("Close the {0}", null, "it-IT", "chiudi {0}", null),
+            // Nothing to conclude when the source opens with a hole...
+            new TranslationRow("{0} uses the {1} with the {2}", null, "it-IT", "{0} usa {1} con {2}", null),
+            // ...nor when the translation opens with one.
+            new TranslationRow("It is a big and bulky {0}, but you could still carry it.", null, "it-IT",
+                "{0} è grosso e ingombrante, ma potresti portarlo.", null));
+
+        var opening = Assert.Single(findings, finding => finding.Rule == TranslationLint.Rules.LowercaseOpening);
+        Assert.Equal("Close the {0}", opening.Key);
+        Assert.Equal(LintSeverity.Warning, opening.Severity);
+    }
+
+    [Fact]
+    public void A_value_wearing_a_capital_it_never_declared_is_reported()
+    {
+        // "Giocatore Uno intasca la Ricetta segreta": the capital travels with
+        // the value wherever it lands, and the engine cannot know whether that
+        // was meant. Either answer is a fix — declare the trait, or go
+        // lowercase — and both need saying out loud.
+        var findings = Inspect(
+            new TranslationRow("Secret recipe", null, "it-IT", "Ricetta segreta", "GENDER-female"),
+            new TranslationRow("Bucket", null, "it-IT", "secchio", "GENDER-male"),
+            new TranslationRow("The Pirate Galley", null, "it-IT", "La Galea Pirata", "GENDER-female,Capitalize"));
+
+        var undeclared = Assert.Single(findings, finding => finding.Rule == TranslationLint.Rules.UndeclaredCapital);
+        Assert.Equal("Secret recipe", undeclared.Key);
+        Assert.Equal(LintSeverity.Warning, undeclared.Severity);
+    }
+
+    [Fact]
     public void A_value_capitalized_in_one_language_and_not_in_another_is_a_common_noun_in_disguise()
     {
         // The real defect: the model called the bonfire a proper name in

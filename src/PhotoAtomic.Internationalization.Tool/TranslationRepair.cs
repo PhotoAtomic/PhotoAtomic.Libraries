@@ -33,6 +33,7 @@ public sealed class TranslationRepair(ITranslator translator, ITranslationStore 
         TranslationLint.Rules.GenderlessValue,
         TranslationLint.Rules.InconsistentAgreement,
         TranslationLint.Rules.DisputedCapitalization,
+        TranslationLint.Rules.UndeclaredCapital,
     ];
 
     private const int Attempts = 3;
@@ -54,7 +55,7 @@ public sealed class TranslationRepair(ITranslator translator, ITranslationStore 
 
         var live = findings.Where(finding => !orphans.Contains(finding.Key)).ToList();
 
-        var locally = Localy(live, log);
+        var locally = Normalize(entries, log) + Localy(live, log);
 
         // What the model gives back REPLACES the unit it answers for, so the
         // replacements are collected here and written in one go at the end.
@@ -99,6 +100,47 @@ public sealed class TranslationRepair(ITranslator translator, ITranslationStore 
     }
 
     private static (string Key, string Language) Unit(TranslationRow row) => (row.Key, row.Language);
+
+    /// <summary>
+    /// Every value put back the way the CATALOG says it should be: a proper
+    /// name keeps its capital and declares it, a common noun goes lowercase.
+    ///
+    /// No model is asked, because there is nothing to ask: whoever owns the
+    /// content already answered when they emitted the catalog. This exists
+    /// because rows outlive the rules that judge them — the table holds
+    /// translations written before anyone thought to mark rooms as places, and
+    /// a fill that skips what is already there would never revisit them.
+    /// </summary>
+    private int Normalize(IReadOnlyList<CatalogEntry> entries, Action<string>? log)
+    {
+        var known = entries
+            .Where(entry => entry.Kind == CatalogEntryKind.Value)
+            .GroupBy(entry => entry.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var normalized = 0;
+
+        foreach (var row in store.LoadAll())
+        {
+            if (!known.TryGetValue(row.Key, out var entry))
+            {
+                continue; // not ours to judge: a sentence, or content from elsewhere
+            }
+
+            var hygienic = Hygienic(row, entry);
+            if (hygienic == row)
+            {
+                continue;
+            }
+
+            store.Save(hygienic);
+            normalized++;
+            log?.Invoke($"  [{row.Language}] {row.Key} -> \"{hygienic.Template}\""
+                + (hygienic.Traits == row.Traits ? string.Empty : $" [{hygienic.Traits}]"));
+        }
+
+        return normalized;
+    }
 
     /// <summary>
     /// The plain row a set of variants never got. Reusing WithFallback means
@@ -192,8 +234,16 @@ public sealed class TranslationRepair(ITranslator translator, ITranslationStore 
                         continue;
                     }
 
+                    // The same hygiene the fill applies, or repairing a value
+                    // would quietly undo it: a common noun back to lowercase, a
+                    // proper name keeping the trait the catalog says it has.
+                    // Two paths that write the same rows have to agree, and the
+                    // way they disagree is never visible until a room's title
+                    // comes back lowercase in one language only.
                     var proposed = TranslationLint.WithFallback(answer)
-                        .Select(row => new TranslationRow(key, row.Context, language, row.Template, row.Traits))
+                        .Select(row => Hygienic(
+                            new TranslationRow(key, row.Context, language, row.Template, row.Traits),
+                            entry))
                         .ToList();
 
                     // Certain defects always disqualify an answer; the ones we
@@ -236,6 +286,23 @@ public sealed class TranslationRepair(ITranslator translator, ITranslationStore 
         }
 
         return (reasked, failed);
+    }
+
+    /// <summary>
+    /// A value as the engine needs it: lowercase unless the catalog says this
+    /// is a proper name. Sentences are left exactly as translated — their
+    /// opening is the author's business, not ours.
+    /// </summary>
+    private static TranslationRow Hygienic(TranslationRow row, CatalogEntry? entry)
+    {
+        if (entry is null || entry.Kind == CatalogEntryKind.Sentence)
+        {
+            return row;
+        }
+
+        return entry.Facts.Contains(WellKnownTraits.Capitalize, StringComparer.Ordinal)
+            ? ValueHygiene.AsProperNoun(row)
+            : ValueHygiene.AsCommonNoun(row);
     }
 
     /// <summary>

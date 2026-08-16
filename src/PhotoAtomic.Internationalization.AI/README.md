@@ -17,6 +17,11 @@ produce, and each case is asked for by name, one call at a time, with its exampl
 sitting inside the placeholder. Answers are verified hole by hole and asked again when a
 placeholder went missing, was invented, or an example word leaked into the template.
 
+The prompt is explicit about who owns the capital letters: values come back bare and lowercase
+(the engine capitalizes the one that opens a sentence), while **templates are never touched**,
+so the model writes each with the capitalization it will have on screen — and a template that
+forgets it is reported by the lint rather than silently patched on the way to the display.
+
 When an answer has to be asked for again, the reason travels with the question:
 `TranslationRequest.Feedback` reaches the model as the last paragraph of the prompt, because at
 temperature 0 the same question returns the same defect forever. A call that never arrived is a

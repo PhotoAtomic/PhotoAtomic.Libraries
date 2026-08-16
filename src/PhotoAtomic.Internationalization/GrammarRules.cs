@@ -127,20 +127,57 @@ public static class GrammarRules
     private static string TwoLetter(string language) =>
         language.Length >= 2 ? language[..2].ToLowerInvariant() : language.ToLowerInvariant();
 
-    public static string ApplySentenceCapitalization(string text, string language)
+    /// <summary>
+    /// Which holes of a template open a sentence — the start of the text, or
+    /// anything after a full stop.
+    ///
+    /// This is where the capital goes, and NOWHERE ELSE. The reason automatic
+    /// capitalization exists at all is that values are stored lowercase, so
+    /// that "la chiave" reads right in the middle of a sentence; a value that
+    /// lands at the front therefore needs a capital nobody wrote. The TEMPLATE
+    /// needs nothing: someone — an author, a translator, a model — already
+    /// decided how it opens, and rewriting their first letter is a silent
+    /// correction of a deliberate choice. It also hid their mistakes: a
+    /// translation that opened in lowercase used to be quietly patched here
+    /// instead of being reported by the lint, which is the part of the system
+    /// whose job is judging.
+    ///
+    /// Quotes and brackets stay transparent, so a value opening inside them is
+    /// still an opening ("«{0}» disse lei").
+    /// </summary>
+    public static IReadOnlyList<int> HolesOpeningASentence(string template)
     {
-        if (text.Length == 0)
-        {
-            return text;
-        }
-
-        var culture = ResolveCulture(language);
-        var characters = text.ToCharArray();
+        var opening = new List<int>();
         var atSentenceStart = true;
 
-        for (var i = 0; i < characters.Length; i++)
+        for (var i = 0; i < template.Length; i++)
         {
-            var current = characters[i];
+            var current = template[i];
+
+            // A doubled brace is a literal one: punctuation, hence transparent.
+            if (current is '{' or '}' && i + 1 < template.Length && template[i + 1] == current)
+            {
+                i++;
+                continue;
+            }
+
+            if (current == '{' && template.IndexOf('}', i + 1) is var close and >= 0)
+            {
+                var inside = template[(i + 1)..close];
+                var digits = new string(inside.TakeWhile(char.IsDigit).ToArray());
+
+                if (digits.Length > 0)
+                {
+                    if (atSentenceStart)
+                    {
+                        opening.Add(int.Parse(digits));
+                    }
+
+                    atSentenceStart = false;
+                    i = close;
+                    continue;
+                }
+            }
 
             if (current is '.' or '!' or '?')
             {
@@ -148,29 +185,40 @@ public static class GrammarRules
                 continue;
             }
 
-            if (!atSentenceStart || char.IsWhiteSpace(current))
+            if (char.IsWhiteSpace(current) || char.IsPunctuation(current) || char.IsSymbol(current))
             {
                 continue;
-            }
-
-            // Quotes, brackets and other punctuation are transparent: the
-            // sentence can open inside them ("la porta" -> "La porta").
-            if (char.IsPunctuation(current) || char.IsSymbol(current))
-            {
-                continue;
-            }
-
-            // The first substantial character decides: a letter gets uppercased,
-            // anything else (a digit, a symbol) opens the sentence as-is.
-            if (char.IsLetter(current))
-            {
-                characters[i] = culture.TextInfo.ToUpper(current);
             }
 
             atSentenceStart = false;
         }
 
-        return new string(characters);
+        return opening;
+    }
+
+    /// <summary>
+    /// A value about to open a sentence, capitalized. Leading punctuation is
+    /// stepped over — a value may arrive quoted — and a value that starts with
+    /// a digit opens the sentence as it is.
+    /// </summary>
+    public static string CapitalizeInitial(string value, string language)
+    {
+        var culture = ResolveCulture(language);
+
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (char.IsLetter(value[i]))
+            {
+                return value[..i] + culture.TextInfo.ToUpper(value[i]) + value[(i + 1)..];
+            }
+
+            if (!char.IsWhiteSpace(value[i]) && !char.IsPunctuation(value[i]) && !char.IsSymbol(value[i]))
+            {
+                break; // a digit, or anything else that is not a letter to raise
+            }
+        }
+
+        return value;
     }
 
     private static CultureInfo ResolveCulture(string language)

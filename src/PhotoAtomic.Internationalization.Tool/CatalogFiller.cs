@@ -50,10 +50,26 @@ public sealed class CatalogFiller(ITranslator translator, ITranslationStore stor
 
                 var rows = await translator.TranslateAsync(request, cancellationToken);
 
+                // Whether a value keeps its capital is not a matter of taste and
+                // not the model's call: a common noun goes lowercase so it reads
+                // right inside a sentence, a proper name says so with the trait
+                // and keeps it everywhere. Models capitalize "Falò" as readily
+                // as "acqua", so the answer is normalized here — and which of
+                // the two a value is comes from the CATALOG, because only
+                // whoever owns the content knows that a room is a place.
+                var proper = pair.entry.Kind == CatalogEntryKind.Value
+                    && pair.entry.Facts.Contains(WellKnownTraits.Capitalize, StringComparer.Ordinal);
+
                 foreach (var row in TranslationLint.WithFallback(rows))
                 {
                     // Key and language are ours, whatever the translator echoed.
-                    store.Save(new TranslationRow(pair.entry.Key, row.Context, pair.language, row.Template, row.Traits));
+                    var saved = new TranslationRow(pair.entry.Key, row.Context, pair.language, row.Template, row.Traits);
+
+                    store.Save(pair.entry.Kind == CatalogEntryKind.Sentence
+                        ? saved
+                        : proper
+                            ? ValueHygiene.AsProperNoun(saved)
+                            : ValueHygiene.AsCommonNoun(saved));
                 }
 
                 if (rows.Count > 0)
