@@ -80,6 +80,27 @@ public static class Internationalization
     /// </summary>
     public static void UseTranslator(ITranslator? missingRowTranslator) => translator = missingRowTranslator;
 
+    /// <summary>
+    /// Teaches the engine to write numbers in words — "two", "due", "два" —
+    /// for values wrapped in <see cref="Spelled"/>. Given the amount and the
+    /// target language, return the words, or null to decline.
+    ///
+    /// A hook rather than a dependency because this library ships inside a
+    /// WebAssembly client: whoever wants a spelling library pays for it, and
+    /// whoever does not gets digits. DECLINING IS PART OF THE CONTRACT — a
+    /// speller that does not know a language must return null rather than
+    /// guess, since a library that quietly answers in English (some do, for
+    /// Gaelic and Welsh) puts an English word in the middle of a Gaelic
+    /// sentence, which is worse than the digit it replaced.
+    ///
+    /// The TABLE always wins: a row for "1" is how a language says the thing
+    /// its rules cannot state — a form that agrees with the noun after it, an
+    /// irregularity, a word no library knows.
+    /// </summary>
+    public static void UseNumberWords(Func<decimal, string, string?>? speller) => numberWords = speller;
+
+    private static Func<decimal, string, string?>? numberWords;
+
     /// <summary>Completes when every queued background fill has finished. Meant for tests, demos and shutdown.</summary>
     public static Task WhenIdleAsync() => Task.WhenAll(PendingFills.Values.ToArray());
 
@@ -151,7 +172,7 @@ public static class Internationalization
         if (BestRow(rendered, language, facts) is not { } row)
         {
             QueueFill(rendered, language, [], facts);
-            return rendered;
+            return Spell(value, language) ?? rendered;
         }
 
         return row.Traits.Contains(WellKnownTraits.Capitalize) && row.Template.Length > 0
@@ -248,6 +269,7 @@ public static class Internationalization
                 else
                 {
                     QueueFill(rendered, language, [argument.Expression], valueFacts);
+                    rendered = Spell(argument.Value, language) ?? rendered;
                 }
             }
 
@@ -300,6 +322,15 @@ public static class Internationalization
         // to bring, which is knowable only once they are in place.
         return GrammarRules.ApplyElision(sentence, language);
     }
+
+    /// <summary>
+    /// The words for a number nobody translated, when a speller was
+    /// registered and knows this language. Only for values that ASKED to be
+    /// spelled: a bare number in a sentence stays a numeral, because most of
+    /// them should.
+    /// </summary>
+    private static string? Spell(object? value, string language) =>
+        value is Spelled spelled ? numberWords?.Invoke(spelled.Amount, language) : null;
 
     /// <summary>
     /// Queues a background translation for a missing row, once per

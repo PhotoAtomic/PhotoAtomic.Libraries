@@ -197,6 +197,20 @@ category for TWO and puts the following noun in the lenited singular. Its key
 is formatted with the invariant culture on purpose: a key that moved with the
 reader's language would make `1000` and `1,000` two different words to learn.
 
+Where the words come from is not this library's business:
+`UseNumberWords((amount, language) => ...)` attaches any speller — Humanizer
+does this offline for a dozen-odd languages, with no model and no network. A
+hook rather than a dependency, because the core ships inside a WebAssembly
+client: whoever wants a spelling library pays for it, whoever does not gets
+digits. The order is **table, then speller, then digits** — a row always wins,
+since a library knows a language's cardinals but not that *this* sentence
+wants the feminine, or the irregular form, or the word no library knows.
+
+**Declining is part of the contract.** A speller that does not know a language
+must return `null`, not guess: some libraries answer for Gaelic and Welsh by
+falling back to English, and an English word inside a Gaelic sentence is a
+mistake nobody will notice, while the digit it replaced was merely plain.
+
 ### `Phrase` — a sentence written as data
 
 `new Phrase("The {liquid} boils away in the {vessel}").Render(values)` is the

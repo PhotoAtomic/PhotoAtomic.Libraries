@@ -101,4 +101,64 @@ public class SpelledTests : IDisposable
 
         Assert.Equal("tre", Value(new Spelled(3)));
     }
+
+    [Fact]
+    public void A_speller_writes_the_numbers_nobody_translated()
+    {
+        // The engine knows nothing about any spelling library: it knows that
+        // someone MIGHT be able to write a number, and asks.
+        UseNumberWords((amount, language) => language.StartsWith("it") && amount == 4 ? "quattro" : null);
+        SetTranslation("You found {0} coins", "it-IT", "Hai trovato {0} monete", context: "0:CLDR-other");
+        Language = "it-IT";
+
+        Assert.Equal("Hai trovato quattro monete", T($"You found {new Spelled(4)} coins"));
+
+        // ...and a speller that declines leaves the digits, which is the point
+        // of being allowed to decline: a library that answers in the wrong
+        // language does more harm than a numeral.
+        Assert.Equal("Hai trovato 5 monete", T($"You found {new Spelled(5)} coins"));
+
+        UseNumberWords(null);
+    }
+
+    [Fact]
+    public void The_table_wins_over_the_speller()
+    {
+        // A library knows the cardinals of a language; it does not know that
+        // THIS sentence wants the feminine, or that this language has an
+        // irregular form here. Whoever wrote a row meant it.
+        UseNumberWords((_, _) => "uno");
+        SetTranslation("1", "it-IT", "una", context: "text");
+        SetTranslation("You found {0} coins", "it-IT", "Hai trovato {0} moneta", context: "0:CLDR-one");
+        Language = "it-IT";
+
+        Assert.Equal("Hai trovato una moneta", T($"You found {new Spelled(1)} coins"));
+
+        UseNumberWords(null);
+    }
+
+    [Fact]
+    public void Only_numbers_that_asked_to_be_spelled_are_spelled()
+    {
+        // A bare number in a sentence stays a numeral, because most of them
+        // should: "3 coins" is not a mistake, and nobody asked for words.
+        UseNumberWords((_, _) => "SPELLED");
+        SetTranslation("You found {0} coins", "it-IT", "Hai trovato {0} monete", context: "0:CLDR-other");
+        Language = "it-IT";
+
+        Assert.Equal("Hai trovato 3 monete", T($"You found {3} coins"));
+
+        UseNumberWords(null);
+    }
+
+    [Fact]
+    public void As_a_label_the_speller_answers_too()
+    {
+        UseNumberWords((amount, _) => amount == 9 ? "nove" : null);
+        Language = "it-IT";
+
+        Assert.Equal("nove", Value(new Spelled(9)));
+
+        UseNumberWords(null);
+    }
 }
