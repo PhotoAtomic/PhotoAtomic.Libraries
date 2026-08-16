@@ -128,6 +128,39 @@ neighbours. `ValueHygiene` holds the checks — cheaper than debugging that:
 Deciding *which* values are proper names stays with the application: only it
 knows that "The Pirate Galley" is a place and "iron lever" is a thing.
 
+### `TranslationLint` — what is wrong with a table, measured
+
+Prompt tuning was guesswork: a checklist added here, an instruction removed
+there, and no way to tell whether the corpus got better or worse.
+`TranslationLint.Inspect(rows, sentenceKeys?)` reads the translations
+themselves — **no model in the loop**, the customs desk is arithmetic — and
+returns `LintFinding`s ordered by rule then key, so two runs read the same.
+Errors are defects by construction, warnings are suspicions worth reading
+(`LintSeverity`), so CI can gate on the certain ones alone. Every rule was
+earned by a defect that reached a running application; the names are constants
+on `TranslationLint.Rules`:
+
+- `missing-hole` / `stray-hole` — a hole of the key that never arrives in the
+  template (the sentence renders half-said), or one the key does not have
+  (`FormatException` at render time);
+- `inconsistent-agreement` — one hole changes the sentence in some of its
+  cases and not in others: one of the two is wrong;
+- `no-fallback-row` — variants with no plain row, so a combination nobody
+  foresaw finds nothing and falls back to the source language;
+- `genderless-value` — a value that forgot to say its gender, in a language
+  that declines it (read from the corpus, not from a list);
+- `example-left-in` — the template kept a word from the example it was shown
+  ("infila la {1} nel falò");
+- `disputed-capitalization` — one language calls the value a proper name and
+  another does not;
+- `orphan-row` — a sentence nobody says any more, the code that asked for it
+  is gone. Only reported when the caller passes the sentence keys it knows.
+
+`WithFallback(rows)` is the repair that belongs next to the writer rather than
+to the tool: a set of variants with no unconditional row gets the plain one
+they forgot (the least committed variant), so a value with unforeseen traits
+finds *something* instead of English.
+
 ### `PluralRules` — CLDR categories, no AI
 
 `CategoryOf(value, language)` maps a number to its CLDR category
@@ -172,7 +205,17 @@ the last row for equal specificity wins, so a bad row is fixed by appending a
 better one. Reads are eager with permissive sharing (concurrent append/load safe).
 `CsvTranslationStore.Parse(content)` reads the same format out of a string,
 for hosts that have no filesystem — a WebAssembly client fetching the table
-over HTTP shares the file store's format exactly.
+over HTTP shares the file store's format exactly. The file is written as UTF-8
+**without** a byte order mark, and a mark left by someone else's editor is
+stripped on read: in front of the header it would make the first field read as
+`﻿key`, turning the header itself into a translation row.
+
+Deleting is the one thing appending cannot say, so it is asked for by name:
+`IRewritableTranslationStore.ReplaceAll(rows)` (implemented by
+`CsvTranslationStore`) rewrites the whole table in the given order, via a
+temporary file moved over the original — a crash halfway leaves the old table
+intact rather than half a new one. Most stores have no business deleting,
+which is why it is a separate interface.
 
 ### Runtime AI fill — `ITranslator` / `UseTranslator`
 
@@ -188,7 +231,7 @@ path that makes runtime-generated content translatable at all.
 
 `AiTranslator` implements `ITranslator` on `IChatClient`
 (Microsoft.Extensions.AI), so any provider fits;
-`ForOpenAiCompatibleEndpoint(endpoint, apiKey, model, systemPrompt?, applicationContext?, vocabulary?)`
+`ForOpenAiCompatibleEndpoint(endpoint, apiKey, model, systemPrompt?, applicationContext?, vocabulary?, retry?)`
 connects to e.g. Azure AI Foundry. The prompt teaches the row format and the
 exact tag vocabulary, and includes hard-won rules:
 
@@ -233,6 +276,23 @@ Two traits are derived rather than asked, because they are mechanical and
 models forget them: `starts-with-vowel` on a value that begins with one, and
 the unconditional generic row for a value answered only in plural variants.
 
+### Asking again — the complaint, and the line
+
+`TranslationRequest.Feedback` carries what was wrong with the last answer to
+this same request, in the words of whoever rejected it ("the sentence agrees
+with hole {1} in some cases but not in others"). It reaches the model as the
+**last** paragraph of the prompt, after every rule and example, because that is
+the one thing not true of every other call. Without it a second attempt is
+pointless: at temperature 0 the same question returns the same defect forever.
+
+A refused answer and a call that never arrived are different failures.
+`TransportRetry(attempts, backoff)` covers only the second: the line breaking,
+timing out or throttling gets asked again after a doubling pause (`Default` is
+used when none is given), while a 4xx with a verdict of its own — a wrong key,
+a model that does not exist, a request we malformed — is final, since insisting
+only spends the same failure four times. Refusals are judged upstream and never
+retried here.
+
 ---
 
 ## SourceGen: the compile-time catalog
@@ -257,7 +317,36 @@ generator-derived key to the runtime `KeyOf` — they cannot diverge silently.
 ## The Tool: pre-translate at build time, verify in CI
 
 ```
-tool <assembly.dll | project.csproj> [--csv <path>] [--verify]
+tool <assembly.dll | project.csproj> [--csv <path>] --all
+```
+
+**`--all` is the whole workflow in one command.** Write your UI with `T(...)`,
+list your target languages in the config, run it once:
+
+1. **prune** — rows for sentences the code no longer says are deleted (values
+   are never touched: the catalog does not carry the names of things, so their
+   absence from it proves nothing).
+2. **values, then sentences** — in that order, and the order is the point. A
+   sentence asks for the grammatical cases its holes can actually produce, and
+   those come from the values already translated. Fill a cold table in one pass
+   and every sentence is written while the vocabulary is still empty: nothing
+   is ever declined, and the engine's whole reason for existing is gone.
+3. **lint → repair → lint**, round after round, until the count stops falling
+   (three rounds at most). Only the units the lint complained about are asked
+   again, one at a time, each with the complaint in hand — a model answering at
+   temperature 0 needs a different question, not the same one twice.
+4. **what is still wrong is reported and moved to the END of the CSV**, so a
+   human opens the file and lands on the work. Whole units move together: among
+   rows with the same criteria the last one wins, and those rows always live in
+   the same unit, so moving units is safe where moving single rows would not be.
+
+Exit 0 when nothing is left, 4 when something needs a human. A rerun with
+nothing to do makes no AI calls and leaves the file byte-identical.
+
+The single steps stay available for CI and for looking closer:
+
+```
+tool <assembly.dll | project.csproj> [--csv <path>] [--verify] [--lint] [--fix] [--prune]
 ```
 
 - **dll mode** reads the baked `TranslationCatalog`.
@@ -272,6 +361,17 @@ tool <assembly.dll | project.csproj> [--csv <path>] [--verify]
   sentence variants are asked for against real words.
 - **`--verify`**: no AI, no network — checks that every unit has rows for every
   configured language; prints each missing pair and exits 3. The CI gate.
+- **`--lint`**: no AI — reads what the translations SAY and reports what is
+  wrong with them (the rules of `TranslationLint`, tallied per rule and then
+  detailed). Exit 4 on an error; warnings only inform.
+- **`--fix`**: repairs what the lint found — from the table itself where the
+  answer is there (the missing plain row is the least committed variant), and
+  by asking the model again, one unit at a time, where it is not. Every answer
+  is linted before it is believed, and a repaired unit REPLACES its old rows
+  rather than being appended over them.
+- **`--prune`**: deletes the dead sentences. Refuses to run when the catalog
+  has no sentences at all — that is a catalog that failed to load, not a table
+  that died.
 
 Configuration (appsettings.json next to the tool + user secrets + env vars):
 `Translator:Languages` (array), `Translator:Csv`, `Translator:Endpoint`,
@@ -279,5 +379,5 @@ Configuration (appsettings.json next to the tool + user secrets + env vars):
 and `Translator:ApplicationContext`.
 
 The intended shape: static content is pre-translated and shipped in the CSV
-(no network at runtime), the runtime AI fill covers dynamically generated
-content, and `--verify` keeps everyone honest.
+(no network at runtime) with `--all`, the runtime AI fill covers dynamically
+generated content, and `--verify` (or `--lint`) keeps everyone honest in CI.

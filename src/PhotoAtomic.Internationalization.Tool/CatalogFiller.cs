@@ -50,7 +50,7 @@ public sealed class CatalogFiller(ITranslator translator, ITranslationStore stor
 
                 var rows = await translator.TranslateAsync(request, cancellationToken);
 
-                foreach (var row in rows)
+                foreach (var row in TranslationLint.WithFallback(rows))
                 {
                     // Key and language are ours, whatever the translator echoed.
                     store.Save(new TranslationRow(pair.entry.Key, row.Context, pair.language, row.Template, row.Traits));

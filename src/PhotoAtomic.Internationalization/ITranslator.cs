@@ -10,7 +10,19 @@ public sealed record TranslationRequest(
     string SourceLanguage,
     string TargetLanguage,
     IReadOnlyList<string> Legend,
-    IReadOnlyList<string> Facts);
+    IReadOnlyList<string> Facts)
+{
+    /// <summary>
+    /// What was wrong with the last answer to this same request, in the words
+    /// of whoever rejected it ("the sentence agrees with hole {1} in some cases
+    /// but not in others").
+    ///
+    /// Asking again is otherwise pointless: the models we use answer at
+    /// temperature 0, so the same prompt gives back the same defect forever.
+    /// The complaint is the only thing that changes the question.
+    /// </summary>
+    public string? Feedback { get; init; }
+}
 
 /// <summary>
 /// Produces translation rows for a missing key. Implementations may return

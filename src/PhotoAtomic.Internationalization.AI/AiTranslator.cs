@@ -19,8 +19,11 @@ public sealed class AiTranslator(
     IChatClient chatClient,
     string? systemPrompt = null,
     string? applicationContext = null,
-    ValueVocabulary? vocabulary = null) : ITranslator
+    ValueVocabulary? vocabulary = null,
+    TransportRetry? retry = null) : ITranslator
 {
+    private readonly TransportRetry retry = retry ?? TransportRetry.Default;
+
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private sealed record RowDto(string? Template, string? Criteria, string? Traits);
@@ -36,7 +39,8 @@ public sealed class AiTranslator(
         string model,
         string? systemPrompt = null,
         string? applicationContext = null,
-        ValueVocabulary? vocabulary = null)
+        ValueVocabulary? vocabulary = null,
+        TransportRetry? retry = null)
     {
         var baseEndpoint = new Uri(endpoint.AbsoluteUri.Replace("/chat/completions", string.Empty).TrimEnd('/'));
 
@@ -44,7 +48,7 @@ public sealed class AiTranslator(
             .GetChatClient(model)
             .AsIChatClient();
 
-        return new AiTranslator(client, systemPrompt, applicationContext, vocabulary);
+        return new AiTranslator(client, systemPrompt, applicationContext, vocabulary, retry);
     }
 
     public async Task<IReadOnlyList<TranslationRow>> TranslateAsync(TranslationRequest request, CancellationToken cancellationToken = default)
@@ -152,14 +156,71 @@ public sealed class AiTranslator(
         List<ChatMessage> messages =
         [
             new(ChatRole.System, effectiveSystemPrompt),
-            new(ChatRole.User, userPrompt),
+            new(ChatRole.User, WithFeedback(userPrompt, request)),
         ];
 
         var options = new ChatOptions { ResponseFormat = ChatResponseFormat.Json, Temperature = 0 };
-        var response = await chatClient.GetResponseAsync(messages, options, cancellationToken);
+        var response = await GetResponseAsync(messages, options, cancellationToken);
 
         return Parse(response.Text, request);
     }
+
+    /// <summary>
+    /// The complaint goes LAST, after every rule and example: it is the one
+    /// thing about this call that is not true of every other call, and the last
+    /// paragraph is the one a model weighs most.
+    /// </summary>
+    private static string WithFeedback(string userPrompt, TranslationRequest request) =>
+        string.IsNullOrWhiteSpace(request.Feedback)
+            ? userPrompt
+            : userPrompt
+                + Environment.NewLine
+                + "A previous attempt at this same sentence was REJECTED for this reason: "
+                + request.Feedback
+                + Environment.NewLine
+                + "Write it again, fixing exactly that, and keep everything else about the translation as it was.";
+
+    /// <summary>
+    /// Asking, with the line's own failures told apart from the model's. A
+    /// refused answer is judged upstream and never retried here — the same
+    /// question at temperature 0 returns the same answer. A service that broke,
+    /// timed out or throttled gets asked again after a growing pause, because
+    /// that is a different question only in when it is asked.
+    /// </summary>
+    private async Task<ChatResponse> GetResponseAsync(
+        List<ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await chatClient.GetResponseAsync(messages, options, cancellationToken);
+            }
+            catch (Exception exception) when (attempt < retry.Attempts
+                && !cancellationToken.IsCancellationRequested
+                && IsTransport(exception))
+            {
+                await Task.Delay(retry.DelayBefore(attempt + 1), cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the call never got an answer, as opposed to getting a bad one.
+    /// Refusals with a verdict of their own — a wrong key, a model that does
+    /// not exist, a request we malformed — are 4xx and stay final: insisting
+    /// only spends the same failure four times.
+    /// </summary>
+    private static bool IsTransport(Exception exception) => exception switch
+    {
+        ClientResultException failure => failure.Status is 0 or 408 or 409 or 425 or 429 or >= 500,
+        HttpRequestException => true,
+        IOException => true,
+        OperationCanceledException => true, // its own timeout, not our token: checked by the caller
+        _ => false,
+    };
 
     /// <summary>
     /// One case per call. Batching was cheaper but measurably worse: asked

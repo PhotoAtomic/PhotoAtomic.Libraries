@@ -18,9 +18,21 @@ namespace PhotoAtomic;
 /// translations get appended at runtime (future AI fill) while other parts of
 /// the process may be loading, and neither side may block the other.
 /// </summary>
-public sealed class CsvTranslationStore : ITranslationStore
+public sealed class CsvTranslationStore : IRewritableTranslationStore
 {
     private const string Header = "key,context,language,template,traits";
+
+    /// <summary>
+    /// UTF-8 with no byte order mark. .NET's Encoding.UTF8 writes one, and a
+    /// mark in front of the header makes the first field read as "﻿key":
+    /// the header stops being recognised and becomes a translation row, which
+    /// is exactly as absurd as it sounds — a language called "language" with a
+    /// template called "template".
+    /// </summary>
+    private static readonly Encoding Utf8 = new UTF8Encoding(false);
+
+    /// <summary>Not part of any key: it belongs to the encoding.</summary>
+    private const char ByteOrderMark = '\uFEFF';
 
     private readonly string path;
 #if NET9_0_OR_GREATER
@@ -56,7 +68,10 @@ public sealed class CsvTranslationStore : ITranslationStore
     public static IReadOnlyList<TranslationRow> Parse(string content)
     {
         var rows = new List<TranslationRow>();
-        foreach (var record in ParseRecords(content))
+
+        // Whoever wrote the file may have left a byte order mark; it belongs to
+        // the encoding, not to the first key.
+        foreach (var record in ParseRecords(content.TrimStart(ByteOrderMark)))
         {
             if (record.Count != 5)
             {
@@ -79,12 +94,7 @@ public sealed class CsvTranslationStore : ITranslationStore
 
     public void Save(TranslationRow row)
     {
-        var line = string.Join(',',
-            Quote(row.Key),
-            Quote(row.Context ?? string.Empty),
-            Quote(row.Language),
-            Quote(row.Template),
-            Quote(row.Traits ?? string.Empty));
+        var line = Line(row);
 
         lock (writeLock)
         {
@@ -92,7 +102,7 @@ public sealed class CsvTranslationStore : ITranslationStore
             // atomically that a header is needed: no exists-then-check races
             // with concurrent deletions or creations.
             using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-            using var writer = new StreamWriter(stream, Encoding.UTF8);
+            using var writer = new StreamWriter(stream, Utf8);
             if (stream.Position == 0)
             {
                 writer.WriteLine(Header);
@@ -101,6 +111,41 @@ public sealed class CsvTranslationStore : ITranslationStore
             writer.WriteLine(line);
         }
     }
+
+    /// <summary>
+    /// Rewrites the file with exactly these rows, in this order — the one
+    /// operation append-only cannot express, and the reason it exists is
+    /// deletion: rows for sentences the code no longer says are dead weight
+    /// that no amount of appending removes.
+    ///
+    /// Written beside the file and moved over it, so a crash halfway leaves the
+    /// old table intact rather than half a new one: this is the only call that
+    /// can lose translations, and it should not be able to lose them by
+    /// accident.
+    /// </summary>
+    public void ReplaceAll(IEnumerable<TranslationRow> rows)
+    {
+        var content = new StringBuilder().AppendLine(Header);
+        foreach (var row in rows)
+        {
+            content.AppendLine(Line(row));
+        }
+
+        lock (writeLock)
+        {
+            var temporary = path + ".tmp";
+            File.WriteAllText(temporary, content.ToString(), Utf8);
+            File.Move(temporary, path, overwrite: true);
+        }
+    }
+
+    private static string Line(TranslationRow row) =>
+        string.Join(',',
+            Quote(row.Key),
+            Quote(row.Context ?? string.Empty),
+            Quote(row.Language),
+            Quote(row.Template),
+            Quote(row.Traits ?? string.Empty));
 
     private static string Quote(string field) =>
         "\"" + field.Replace("\"", "\"\"") + "\"";

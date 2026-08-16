@@ -34,6 +34,10 @@ public static class ValueHygiene
     public static bool DeclaresGender(TranslationRow row) =>
         TraitsOf(row).Any(trait => trait.StartsWith(GenderPrefix, StringComparison.Ordinal));
 
+    /// <summary>Whether the row claims its text keeps a capital wherever it lands.</summary>
+    public static bool DeclaresCapitalization(TranslationRow row) =>
+        Declares(row, WellKnownTraits.Capitalize);
+
     /// <summary>
     /// A common noun: lowercase unless it insists otherwise. Models return
     /// "Falò" as readily as "acqua", and a capital inside a value survives

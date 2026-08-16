@@ -484,4 +484,95 @@ public class AiTranslatorPromptConfigurationTests
         Assert.StartsWith(AiTranslator.DefaultSystemPrompt, system);
         Assert.Contains("A cookbook full of Italian recipes", system);
     }
+
+    /// <summary>Fails the first few calls the way a service does, then answers.</summary>
+    private sealed class FlakyChatClient(int failures, Exception failure) : IChatClient
+    {
+        public int Calls { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Calls <= failures
+                ? throw failure
+                : Task.FromResult(new ChatResponse(new ChatMessage(
+                    ChatRole.Assistant, """{"rows":[{"template":"Ciao","criteria":"","traits":""}]}""")));
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    [Fact]
+    public async Task A_service_that_did_not_answer_is_asked_again()
+    {
+        // Measured the hard way: a unit failed three runs in a row with
+        // "Service request failed" while the same sentence, asked by hand
+        // against the same endpoint, came back immediately.
+        var flaky = new FlakyChatClient(2, new HttpRequestException("Service request failed"));
+
+        var rows = await new AiTranslator(flaky, retry: new TransportRetry(3, TimeSpan.Zero))
+            .TranslateAsync(AnyRequest());
+
+        Assert.Equal(3, flaky.Calls);
+        Assert.Equal("Ciao", Assert.Single(rows).Template);
+    }
+
+    [Fact]
+    public async Task A_service_that_keeps_failing_gives_up_after_its_attempts()
+    {
+        var flaky = new FlakyChatClient(99, new HttpRequestException("Service request failed"));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            new AiTranslator(flaky, retry: new TransportRetry(3, TimeSpan.Zero)).TranslateAsync(AnyRequest()));
+
+        Assert.Equal(3, flaky.Calls);
+    }
+
+    [Fact]
+    public async Task A_failure_that_is_not_the_line_is_not_worth_a_second_ask()
+    {
+        // A malformed request or a model that does not exist fails the same way
+        // every time: insisting only spends the same failure four times.
+        var flaky = new FlakyChatClient(99, new InvalidOperationException("no such model"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new AiTranslator(flaky, retry: new TransportRetry(4, TimeSpan.Zero)).TranslateAsync(AnyRequest()));
+
+        Assert.Equal(1, flaky.Calls);
+    }
+
+    [Fact]
+    public async Task The_reason_an_answer_was_rejected_reaches_the_model()
+    {
+        // Without it a second attempt is the same question at temperature 0,
+        // and comes back with the same defect.
+        var fake = new CapturingChatClient();
+
+        await new AiTranslator(fake).TranslateAsync(
+            AnyRequest() with { Feedback = "the sentence agrees with hole {1} in some cases but not in others" });
+
+        var user = fake.LastMessages.Single(m => m.Role == ChatRole.User).Text;
+        Assert.Contains("REJECTED", user, StringComparison.Ordinal);
+        Assert.Contains("agrees with hole {1}", user, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Backoff_doubles_and_starts_at_zero_for_the_first_try()
+    {
+        var retry = new TransportRetry(4, TimeSpan.FromSeconds(2));
+
+        Assert.Equal(TimeSpan.Zero, retry.DelayBefore(1));
+        Assert.Equal(TimeSpan.FromSeconds(2), retry.DelayBefore(2));
+        Assert.Equal(TimeSpan.FromSeconds(4), retry.DelayBefore(3));
+        Assert.Equal(TimeSpan.FromSeconds(8), retry.DelayBefore(4));
+    }
 }

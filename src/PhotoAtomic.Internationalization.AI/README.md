@@ -17,6 +17,13 @@ produce, and each case is asked for by name, one call at a time, with its exampl
 sitting inside the placeholder. Answers are verified hole by hole and asked again when a
 placeholder went missing, was invented, or an example word leaked into the template.
 
+When an answer has to be asked for again, the reason travels with the question:
+`TranslationRequest.Feedback` reaches the model as the last paragraph of the prompt, because at
+temperature 0 the same question returns the same defect forever. A call that never arrived is a
+different failure from an answer that was refused: `TransportRetry` asks again after a doubling
+pause when the line broke, timed out or throttled, and gives up immediately on a 4xx that will
+fail the same way however often it is repeated.
+
 ## Installing
 
 ```
