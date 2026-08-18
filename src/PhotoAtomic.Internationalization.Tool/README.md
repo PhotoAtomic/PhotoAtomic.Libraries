@@ -38,6 +38,20 @@ Filling uses the same AI translation pipeline as
 (configure the provider via appsettings / user secrets / environment variables); `--verify` is
 meant for pipelines, so a missing translation breaks the build instead of surprising a user.
 
+## A scene is a chain: one thing, one name
+
+When a catalog entry declares a `Setting` — the one line saying where a term lives, which
+content knows and code does not — that line is also an **identity**. The units of one setting
+are filled **in order**, each request carrying the terms the earlier ones settled on, so a
+press and its base do not come back as a "pressa" and a "torchio". Different settings stay
+side by side, and an entry with no setting at all (code, which has no such thing) is a chain
+of one, so the parallelism is unchanged for everything that had it.
+
+The glossary is seeded from the **table** before a single call is made: a name translated last
+week must lead this run as firmly as one translated a second ago, otherwise a room drifts one
+session at a time. Only the settled terms sharing a word with the key are shown
+(`Lexicon`) — a model handed a dozen unrelated words starts working them in.
+
 ## `--all`: the whole workflow, in the right order
 
 `--all` deletes the rows for sentences the code no longer says, translates the **values first
@@ -54,7 +68,8 @@ The single steps stay available, for CI and for looking closer:
   invented, variants never declined, a set of variants with no plain row to fall back on, a
   value that forgot its gender, an example word left in the template, a translation that opens
   in lowercase where the source opens a sentence, a value carrying a capital it never declared,
-  a sentence nobody says any more). Exit 4 on an error; warnings only inform;
+  a common noun that brought its own article along, a sentence nobody says any more). Exit 4 on
+  an error; warnings only inform;
 - `--fix` — repairs what the lint found: from the table where the answer is already there,
   by re-asking the model **with the complaint in hand** where it is not, and lints again so
   the result is a number rather than a hope;

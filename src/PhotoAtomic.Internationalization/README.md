@@ -163,6 +163,15 @@ on `TranslationLint.Rules`:
   `Capitalize` if it is a name, lowercase it if it is a common noun — and
   reporting beats correcting, because the model that wrote it knows which of
   the two it meant;
+- `article-in-value` — a common noun that arrived with its article attached
+  ("il sapore di quello stufato"): a value goes into a hole bare and the
+  sentence supplies its own, so the reader gets it twice ("Metti il il sapore
+  di quello stufato nella pentola"). A proper name that genuinely carries one
+  is spared, because it says so with the `Capitalize` trait; a value of one
+  word is spared too (a name a language happens to spell like its article is
+  that language's business); and a language whose articles nobody encoded
+  (`GrammarRules.ArticlesOf`) is not judged at all — silence beats being wrong
+  about a grammar we never wrote down;
 - `orphan-row` — a sentence nobody says any more, the code that asked for it
   is gone. Only reported when the caller passes the sentence keys it knows.
 
@@ -246,6 +255,45 @@ they do for code. `Handles(path)` takes a `.json` file or a directory of them
 sequence); a file that turns out not to be a catalog is reported and skipped
 rather than failing the run. `ToJson(entries)` writes the shape it expects.
 
+### One thing, one name — `Setting`, `Glossary`, `Lexicon`
+
+Values are translated one at a time, each its own question, and that is how a
+single object ends up with two names: a room came back with a "pressa pesante
+in pietra" standing next to the "base di torchio in pietra" that belongs to it,
+and in French a "presse à fruits" beside a "pressoir". Neither answer was wrong
+on its own — the question simply never mentioned the other one.
+
+So `TranslationRequest` carries what the caller already knows:
+
+- `Setting` — where the term lives, in one line of prose: the scene around it,
+  the company it keeps. A name is ambiguous alone and obvious in place — a
+  "press" among mortars, pestles and herbs is not a printing press, and its
+  "base" is the base *of* something rather than something made of it.
+  Deliberately **not** the sentences the term appears in, which was the first
+  idea: for a value those are the narrator's generic lines, identical for every
+  object, and a sentence put in front of a model is a sentence it can copy
+  from (`example-left-in`).
+- `Glossary` — the terms already settled in the same body of content, source
+  term next to the translation accepted for it, with the instruction to reuse
+  them exactly. The same bargain the sentence variants already make: the choice
+  a language forces gets made **once** and then held to, so wrong preposition,
+  wrong synonym and wrong register stop being three defects.
+- `Kind` — sentence or value, when the caller knows. Left to itself the model
+  guesses from length: "Steam" is obviously a name, "The taste of that stew"
+  reads like a sentence and comes back with no gender declared — and a value
+  with no gender makes every sentence naming it fall back to the source
+  language. Whoever built the catalog knows which it is; saying so removes a
+  guess.
+
+`CatalogEntry.Setting` carries that line through the catalog and doubles as an
+**identity**: units sharing a setting are pre-translated in order, each told
+what the ones before it settled on, while different settings stay parallel (see
+the Tool). `Lexicon.RelevantTo(settled, key)` decides how much of the glossary
+is worth showing — only the terms sharing a word with the key, because that
+shared word is exactly what can come back translated two different ways.
+Not all of them: a model told to reuse a dozen unrelated words starts working
+them in, and a mortar has nothing to say about a bundle of herbs.
+
 ### `GrammarRules` and `WellKnownTraits` — capitalization and elision
 
 Values are stored lowercase. The trait `Capitalize` keeps an uppercase initial
@@ -269,7 +317,10 @@ Elision is mechanics too, and applied after rendering:
 before a vowel — "mette la acqua" → "mette l'acqua", "le pot de eau" → "le pot
 d'eau" — keeping the capitalization of the word it replaces ("La" → "L'").
 Italian and French are covered; languages without elision pass through
-untouched. `StartsWithVowelSound(text, language)` is the underlying test, aware
+untouched. `ArticlesOf(language)` is a table of its own, kept apart from the
+elisions although the two look alike: "what elides" and "what is an article"
+are different questions, and the French elision list carries pronouns and
+conjunctions that have no business accusing a name. `StartsWithVowelSound(text, language)` is the underlying test, aware
 of the silent H of Italian, French, Spanish, Portuguese and Catalan, and of
 accented vowels. Doing this deterministically keeps the rows few: translators —
 human or AI — spend their attention on gender and meaning, not on one variant
@@ -330,6 +381,12 @@ exact tag vocabulary, and includes hard-won rules:
   the value that opens one — but the model is told plainly that its **templates
   are never touched**: each is written with the capitalization it will have on
   screen.
+- the **setting** first and the **glossary** second, when the request carries
+  them: what the thing is, then what it has already been called, with the
+  instruction to keep the same word for it and to copy nothing out of the
+  setting line itself. And whether the key is a value or a sentence, said
+  outright rather than inferred from how long it is — a value is asked for as
+  a term, with a gender and without a leading article.
 
 `systemPrompt` replaces the default entirely (expert use);
 `applicationContext` is additive — "a point-and-click adventure game" steers

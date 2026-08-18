@@ -23,4 +23,18 @@ public sealed record CatalogEntry(
     string? Context,
     IReadOnlyList<string> Legend,
     IReadOnlyList<string> Facts,
-    CatalogEntryKind Kind = CatalogEntryKind.Sentence);
+    CatalogEntryKind Kind = CatalogEntryKind.Sentence)
+{
+    /// <summary>
+    /// Where this unit lives, in one line — the scene around it, the company it
+    /// keeps. Source code rarely knows such a thing; CONTENT usually does, and
+    /// a room certainly does.
+    ///
+    /// It buys two things. The obvious one is sense: a name is ambiguous alone
+    /// and obvious in place. The other is COHERENCE, and it is why the setting
+    /// is also an identity — units sharing a setting are translated together,
+    /// in order, each one told what the ones before it settled on, so the same
+    /// thing does not end up with two names (see TranslationRequest.Glossary).
+    /// </summary>
+    public string? Setting { get; init; }
+}

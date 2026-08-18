@@ -103,6 +103,58 @@ public class CatalogFillerTests : IDisposable
         Assert.Equal(3, report.Skipped);
     }
 
+    private static readonly CatalogEntry[] Cellar =
+    [
+        new("Heavy stone press", null, [], [], CatalogEntryKind.Value) { Setting = "An alchemist's cellar" },
+        new("Stone press base", null, [], [], CatalogEntryKind.Value) { Setting = "An alchemist's cellar" },
+        new("Stone press handle", null, [], [], CatalogEntryKind.Value) { Setting = "A ship's galley" },
+    ];
+
+    [Fact]
+    public async Task The_units_of_one_scene_are_told_what_the_earlier_ones_settled_on()
+    {
+        var translator = new FakeTranslator();
+
+        await new CatalogFiller(translator, new CsvTranslationStore(path)).FillAsync(Cellar, ["it-IT"]);
+
+        var second = Assert.Single(translator.Requests, r => r.Key == "Stone press base");
+        var known = Assert.Single(second.Glossary);
+        Assert.Equal("Heavy stone press", known.Source);
+        Assert.Equal("[it-IT] Heavy stone press", known.Translation);
+
+        // The scene and what the unit IS travel with the request too.
+        Assert.Equal("An alchemist's cellar", second.Setting);
+        Assert.Equal(CatalogEntryKind.Value, second.Kind);
+    }
+
+    [Fact]
+    public async Task Another_scene_settles_its_own_words()
+    {
+        var translator = new FakeTranslator();
+
+        await new CatalogFiller(translator, new CsvTranslationStore(path)).FillAsync(Cellar, ["it-IT"]);
+
+        // Shares two words with the cellar's press, and still knows nothing of it.
+        var elsewhere = Assert.Single(translator.Requests, r => r.Key == "Stone press handle");
+        Assert.Empty(elsewhere.Glossary);
+    }
+
+    [Fact]
+    public async Task A_name_settled_in_an_earlier_run_leads_this_one_too()
+    {
+        var store = new CsvTranslationStore(path);
+        store.Save(new TranslationRow("Heavy stone press", null, "it-IT", "pressa pesante in pietra", "GENDER-female"));
+
+        var translator = new FakeTranslator();
+        await new CatalogFiller(translator, store).FillAsync(Cellar, ["it-IT"]);
+
+        // The press itself costs nothing (already translated), but its base is
+        // asked for with the word the table already holds.
+        Assert.DoesNotContain(translator.Requests, r => r.Key == "Heavy stone press");
+        var second = Assert.Single(translator.Requests, r => r.Key == "Stone press base");
+        Assert.Equal("pressa pesante in pietra", Assert.Single(second.Glossary).Translation);
+    }
+
     [Fact]
     public async Task A_failing_translation_is_counted_not_thrown()
     {

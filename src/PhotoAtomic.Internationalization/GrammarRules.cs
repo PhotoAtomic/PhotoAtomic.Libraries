@@ -62,6 +62,50 @@ public static class GrammarRules
         return result;
     }
 
+    /// <summary>
+    /// The words a VALUE must never begin with, per language: articles and the
+    /// prepositions that swallow one.
+    ///
+    /// A separate table from the elisions on purpose, although the two look
+    /// alike: "what elides" and "what is an article" are different questions,
+    /// and the French elision list carries pronouns and conjunctions that have
+    /// no business accusing a name. A language absent from here is simply not
+    /// judged — better silent than wrong about a grammar nobody encoded.
+    /// </summary>
+    public static IReadOnlySet<string> ArticlesOf(string language) =>
+        Articles.TryGetValue(TwoLetter(language), out var words) ? words : EmptyArticles;
+
+    private static readonly IReadOnlySet<string> EmptyArticles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Dictionary<string, IReadOnlySet<string>> Articles = new(StringComparer.Ordinal)
+    {
+        ["it"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "l'", "un'",
+            "nel", "nello", "nella", "nei", "negli", "nelle",
+            "del", "dello", "della", "dei", "degli", "delle",
+            "al", "allo", "alla", "ai", "agli", "alle",
+            "sul", "sullo", "sulla", "sui", "sugli", "sulle",
+            "dal", "dallo", "dalla", "dai", "dagli", "dalle",
+        },
+        ["fr"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "le", "la", "les", "un", "une", "des", "du", "de", "l'", "au", "aux",
+        },
+        ["es"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "el", "la", "los", "las", "un", "una", "unos", "unas", "del", "al",
+        },
+        ["pt"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "o", "a", "os", "as", "um", "uma", "uns", "umas", "do", "da", "dos", "das",
+        },
+        ["de"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer", "eines",
+        },
+    };
+
     // Word -> its elided form, per language. Ordered longest-first so that
     // "nella" is tried before "la" would ever see it.
     private static readonly Dictionary<string, (string Word, string Elided)[]> Elisions = new(StringComparer.Ordinal)

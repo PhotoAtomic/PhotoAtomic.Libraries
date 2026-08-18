@@ -64,6 +64,53 @@ public class TranslationLintTests
         Assert.Equal("Stone press base", genderless.Key);
     }
 
+    /// <summary>
+    /// A name of five words reads like a sentence to a model, and a sentence
+    /// starts with an article — so "The taste of that stew" came back as "il
+    /// sapore di quello stufato", which a sentence would then give a second
+    /// article: "Metti il il sapore...".
+    /// </summary>
+    [Fact]
+    public void A_common_noun_that_brought_its_own_article_is_caught()
+    {
+        var findings = Inspect(
+            new TranslationRow("The taste of that stew", null, "it-IT", "il sapore di quello stufato", "GENDER-male"),
+            new TranslationRow("Water", null, "it-IT", "acqua", "GENDER-female"));
+
+        var article = Assert.Single(findings, finding => finding.Rule == TranslationLint.Rules.ArticleInValue);
+        Assert.Equal("The taste of that stew", article.Key);
+
+        // Drop the article and the complaint goes with it.
+        Assert.DoesNotContain(
+            Inspect(new TranslationRow("The taste of that stew", null, "it-IT", "sapore di quello stufato", "GENDER-male")),
+            finding => finding.Rule == TranslationLint.Rules.ArticleInValue);
+    }
+
+    /// <summary>
+    /// A proper name is called what it is called. "La Galea Pirata" carries its
+    /// article the way a title does, and says so with the trait — accusing it
+    /// would be the kind of false alarm that gets a lint ignored.
+    /// </summary>
+    [Fact]
+    public void A_proper_name_may_carry_its_article()
+    {
+        Assert.DoesNotContain(
+            Inspect(new TranslationRow("The Pirate Galley", null, "it-IT", "La Galea Pirata", "GENDER-female,Capitalize")),
+            finding => finding.Rule == TranslationLint.Rules.ArticleInValue);
+    }
+
+    /// <summary>A grammar nobody wrote down is not judged: silence beats being wrong about it.</summary>
+    [Fact]
+    public void A_language_whose_articles_are_unknown_is_left_alone()
+    {
+        Assert.DoesNotContain(
+            TranslationLint.Inspect(
+                [new TranslationRow("The taste of that stew", null, "hu-HU", "az adott pörkölt íze", null)],
+                Sentences,
+                "en-US"),
+            finding => finding.Rule == TranslationLint.Rules.ArticleInValue);
+    }
+
     [Fact]
     public void English_asks_nothing_about_gender_because_the_table_says_it_does_not_decline()
     {

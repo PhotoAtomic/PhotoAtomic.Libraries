@@ -22,6 +22,15 @@ The prompt is explicit about who owns the capital letters: values come back bare
 so the model writes each with the capitalization it will have on screen — and a template that
 forgets it is reported by the lint rather than silently patched on the way to the display.
 
+What the caller knows is said outright instead of being inferred. `TranslationRequest.Kind`
+tells the model whether a key is a sentence or the **name of a thing**, however many words it
+runs to — left to guess by length, a five-word name reads as a sentence and comes back with no
+gender, and a value with no gender makes every sentence naming it fall back to the source
+language. `Setting` describes the scene the term lives in, so a compound name is translated as
+belonging to what it names ("base **della pressa** di pietra") with nothing copied out of the
+line itself. `Glossary` lists the terms already settled in the same content, to be reused
+exactly: two names for one object read as two objects.
+
 When an answer has to be asked for again, the reason travels with the question:
 `TranslationRequest.Feedback` reaches the model as the last paragraph of the prompt, because at
 temperature 0 the same question returns the same defect forever. A call that never arrived is a

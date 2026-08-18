@@ -69,6 +69,9 @@ public static class TranslationLint
 
         /// <summary>A value written with a capital that it never declared: it will keep it mid-sentence.</summary>
         public const string UndeclaredCapital = "undeclared-capital";
+
+        /// <summary>A common noun that arrived with its article attached: the sentence supplies one too.</summary>
+        public const string ArticleInValue = "article-in-value";
     }
 
     /// <param name="sentenceKeys">
@@ -124,6 +127,7 @@ public static class TranslationLint
                 values.Add(row);
                 findings.AddRange(Genders(row, corpus));
                 findings.AddRange(Capital(row));
+                findings.AddRange(Article(row));
             }
         }
 
@@ -266,6 +270,48 @@ public static class TranslationLint
                 $"\"{row.Template}\" declares no gender: every sentence naming it will find no matching row "
                 + "and fall back to the source language");
         }
+    }
+
+    /// <summary>
+    /// A value that arrived with its article attached.
+    ///
+    /// Values go into sentence holes BARE — the sentence owns the article, and
+    /// declines it for the gender the value declares. A value that brings its
+    /// own gets it twice: "Metti il il sapore di quello stufato nella pentola".
+    ///
+    /// Found on a name of five words (2026-08-18): long keys read as sentences
+    /// to a model, and a sentence quite properly starts with an article. Saying
+    /// which it is in the prompt fixed the gender; the article survived that,
+    /// so it is caught here instead of being hoped for.
+    ///
+    /// A PROPER NAME is left alone: "La Galea Pirata" is called that, article
+    /// and all, and it says so with the Capitalize trait. And a language whose
+    /// articles nobody encoded is not judged — silence beats being wrong about
+    /// a grammar we never wrote down.
+    /// </summary>
+    private static IEnumerable<LintFinding> Article(TranslationRow row)
+    {
+        if (ValueHygiene.DeclaresCapitalization(row))
+        {
+            yield break;
+        }
+
+        var articles = GrammarRules.ArticlesOf(row.Language);
+        var first = row.Template.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+        // One word IS the value, however article-shaped: "la" alone is the only
+        // translation "the" could ever have, and a name of one word that a
+        // language spells like its article is that language's business.
+        if (first is null || !articles.Contains(first) || !row.Template.Contains(' '))
+        {
+            yield break;
+        }
+
+        yield return new LintFinding(
+            Rules.ArticleInValue, row.Key, row.Context, row.Language,
+            $"\"{row.Template}\" begins with the article \"{first}\": values go into sentences BARE, so the "
+            + "sentence would supply a second one. Drop the leading article, or declare the value a proper "
+            + "name if it genuinely carries it");
     }
 
     /// <summary>

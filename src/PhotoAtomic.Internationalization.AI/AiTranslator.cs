@@ -323,6 +323,50 @@ public sealed class AiTranslator(
             prompt.Append("Facts of the call that missed: ").AppendLine(string.Join(", ", request.Facts));
         }
 
+        // Whether this is a name or a sentence is not for the model to infer
+        // from how long it is.
+        if (request.Kind == CatalogEntryKind.Value)
+        {
+            prompt.AppendLine(
+                "THIS KEY IS A VALUE — the NAME of a thing, however many words it runs to. Translate it as a "
+                + "term, not as a sentence: no final punctuation, and it MUST declare its gender trait "
+                + "(GENDER-male or GENDER-female), because a value with no gender makes every sentence that "
+                + "names it fall back to the source language. It goes into sentence holes BARE, so it must not "
+                + "begin with an article: the sentence around it owns that.");
+        }
+        else if (request.Kind == CatalogEntryKind.Sentence)
+        {
+            prompt.AppendLine("THIS KEY IS A SENTENCE: leave \"traits\" empty and write the template as it will read on screen.");
+        }
+
+        // The scene first, the settled words second: what the thing IS, then
+        // what it has already been called. A term alone is ambiguous and in
+        // company it is obvious.
+        if (!string.IsNullOrWhiteSpace(request.Setting))
+        {
+            prompt.Append("Where this appears: ").AppendLine(request.Setting);
+            prompt.AppendLine(
+                "Use it to pick the right SENSE of the words, and to see what a compound refers to: a name "
+                + "built from another thing present here names THAT thing, so translate it as belonging to it, "
+                + "with whatever article, preposition or case your language requires INSIDE the name. Never "
+                + "copy anything from this line into the translation.");
+        }
+
+        if (request.Glossary.Count > 0)
+        {
+            prompt.AppendLine("Terms already translated in this same content — reuse them EXACTLY:");
+            foreach (var term in request.Glossary)
+            {
+                prompt.Append("- \"").Append(term.Source).Append("\" was translated \"")
+                    .Append(term.Translation).AppendLine("\"");
+            }
+
+            prompt.AppendLine(
+                "When the key contains one of those terms, or names the same thing, keep the SAME word for it. "
+                + "Two names for one object read as two objects. This binds the word only: inflect and agree it "
+                + "as your language requires.");
+        }
+
         // The explicit checklist: listing the categories the target language
         // distinguishes nudges the model to emit every required variant row
         // instead of remembering CLDR on its own.
